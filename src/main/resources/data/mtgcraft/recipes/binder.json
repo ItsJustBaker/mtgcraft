@@ -1,0 +1,26 @@
+{
+ "type": "minecraft:crafting_shaped",
+ "category": "misc",
+ "pattern": [
+  "LBL",
+  "PSP",
+  "LBL"
+ ],
+ "key": {
+  "L": {
+   "item": "minecraft:leather"
+  },
+  "B": {
+   "item": "minecraft:book"
+  },
+  "P": {
+   "item": "minecraft:paper"
+  },
+  "S": {
+   "item": "minecraft:string"
+  }
+ },
+ "result": {
+  "item": "mtgcraft:binder"
+ }
+}

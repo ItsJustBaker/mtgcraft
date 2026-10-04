@@ -1,0 +1,61 @@
+// Bundles Card-Forge's rules engine (forge-core/game/ai/gui) and its libraries into one jar.
+// Third-party packages are relocated so they can't clash with the versions Minecraft ships
+// (Guava, Gson, Netty, commons-lang3, slf4j...).
+plugins {
+    id 'java'
+    id 'com.gradleup.shadow' version '8.3.5'
+}
+
+def cardForge = file(rootProject.property('card_forge_dir'))
+def forgeVersion = rootProject.property('card_forge_version')
+
+repositories { mavenCentral() }
+
+configurations { cardForgeLibs }
+
+dependencies {
+    ['forge-core', 'forge-game', 'forge-ai', 'forge-gui'].each {
+        implementation files("${cardForge}/${it}/target/${it}-${forgeVersion}.jar")
+    }
+    implementation 'at.yawk.lz4:lz4-java:1.10.2'
+    implementation 'com.apptasticsoftware:rssreader:3.8.2'
+    implementation 'com.google.code.gson:gson:2.13.2'
+    implementation 'com.google.guava:guava:33.3.1-android'
+    implementation 'com.thoughtworks.xstream:xstream:1.4.21'
+    implementation 'io.sentry:sentry:8.21.1'
+    implementation 'org.apache.commons:commons-lang3:3.18.0'
+    implementation 'org.apache.commons:commons-math3:3.6.1'
+    implementation 'org.apache.commons:commons-text:1.12.0'
+    implementation 'org.apfloat:apfloat:1.10.1'
+    implementation 'org.jgrapht:jgrapht-core:1.5.2'
+    implementation 'org.jupnp:org.jupnp:3.0.5'
+    implementation 'org.jupnp:org.jupnp.support:3.0.5'
+    implementation 'org.slf4j:slf4j-api:2.0.16'
+    implementation 'org.tinylog:slf4j-tinylog:2.7.0'
+    implementation 'org.tinylog:tinylog-impl:2.7.0'
+    ['buffer', 'codec', 'codec-http', 'common', 'handler', 'resolver', 'transport'].each {
+        implementation "io.netty:netty-${it}:4.1.115.Final"
+    }
+    ['client', 'http', 'io', 'security', 'server', 'servlet', 'util', 'util-ajax'].each {
+        implementation "org.eclipse.jetty:jetty-${it}:9.4.57.v20241219"
+    }
+    implementation 'javax.servlet:javax.servlet-api:3.1.0'
+}
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(17)
+
+def shadowPrefix = 'dev.mtgcraft.shadow'
+
+shadowJar {
+    archiveClassifier = ''
+    archiveBaseName = 'mtgcraft-engine'
+    mergeServiceFiles()
+    exclude 'META-INF/*.SF', 'META-INF/*.DSA', 'META-INF/*.RSA', 'META-INF/versions/**',
+            'module-info.class', 'META-INF/native/**', 'META-INF/maven/**', 'META-INF/MANIFEST.MF'
+    [
+        'com.google', 'com.apptasticsoftware', 'com.thoughtworks', 'io.netty', 'io.sentry',
+        'javax.servlet', 'net.jpountz', 'org.apache.commons', 'org.apfloat', 'org.checkerframework',
+        'org.eclipse.jetty', 'org.jgrapht', 'org.jheaps', 'org.jupnp', 'org.slf4j', 'org.tinylog',
+        'org.xmlpull', 'org.intellij', 'org.jetbrains', 'javax.annotation', 'org.osgi', 'org.codehaus', 'io.github'
+    ].each { relocate it, "${shadowPrefix}.${it}" }
+}

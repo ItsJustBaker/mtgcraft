@@ -1,0 +1,414 @@
+{
+ "textures": {
+  "art": "mtgcraft:item/pack3d_set",
+  "particle": "mtgcraft:item/pack3d_set"
+ },
+ "gui_light": "front",
+ "elements": [
+  {
+   "from": [
+    4,
+    1,
+    7.5
+   ],
+   "to": [
+    12,
+    15,
+    8.5
+   ],
+   "faces": {
+    "north": {
+     "texture": "#art",
+     "uv": [
+      16,
+      0,
+      0,
+      16
+     ]
+    },
+    "south": {
+     "texture": "#art",
+     "uv": [
+      0,
+      0,
+      16,
+      16
+     ]
+    },
+    "east": {
+     "texture": "#art",
+     "uv": [
+      0,
+      0,
+      1,
+      16
+     ]
+    },
+    "west": {
+     "texture": "#art",
+     "uv": [
+      0,
+      0,
+      1,
+      16
+     ]
+    },
+    "up": {
+     "texture": "#art",
+     "uv": [
+      0,
+      0,
+      16,
+      1
+     ]
+    },
+    "down": {
+     "texture": "#art",
+     "uv": [
+      0,
+      0,
+      16,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "from": [
+    3.8,
+    15,
+    7.7
+   ],
+   "to": [
+    12.2,
+    16,
+    8.3
+   ],
+   "faces": {
+    "north": {
+     "texture": "#art",
+     "uv": [
+      0,
+      0,
+      16,
+      1
+     ]
+    },
+    "south": {
+     "texture": "#art",
+     "uv": [
+      0,
+      0,
+      16,
+      1
+     ]
+    },
+    "east": {
+     "texture": "#art",
+     "uv": [
+      0,
+      0,
+      16,
+      1
+     ]
+    },
+    "west": {
+     "texture": "#art",
+     "uv": [
+      0,
+      0,
+      16,
+      1
+     ]
+    },
+    "up": {
+     "texture": "#art",
+     "uv": [
+      0,
+      0,
+      16,
+      1
+     ]
+    },
+    "down": {
+     "texture": "#art",
+     "uv": [
+      0,
+      0,
+      16,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "from": [
+    3.8,
+    0,
+    7.7
+   ],
+   "to": [
+    12.2,
+    1,
+    8.3
+   ],
+   "faces": {
+    "north": {
+     "texture": "#art",
+     "uv": [
+      0,
+      15,
+      16,
+      16
+     ]
+    },
+    "south": {
+     "texture": "#art",
+     "uv": [
+      0,
+      15,
+      16,
+      16
+     ]
+    },
+    "east": {
+     "texture": "#art",
+     "uv": [
+      0,
+      15,
+      16,
+      16
+     ]
+    },
+    "west": {
+     "texture": "#art",
+     "uv": [
+      0,
+      15,
+      16,
+      16
+     ]
+    },
+    "up": {
+     "texture": "#art",
+     "uv": [
+      0,
+      15,
+      16,
+      16
+     ]
+    },
+    "down": {
+     "texture": "#art",
+     "uv": [
+      0,
+      15,
+      16,
+      16
+     ]
+    }
+   }
+  }
+ ],
+ "display": {
+  "gui": {
+   "rotation": [
+    10,
+    -25,
+    0
+   ],
+   "translation": [
+    0,
+    0,
+    0
+   ],
+   "scale": [
+    1.05,
+    1.05,
+    1.05
+   ]
+  },
+  "ground": {
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "translation": [
+    0,
+    2,
+    0
+   ],
+   "scale": [
+    0.5,
+    0.5,
+    0.5
+   ]
+  },
+  "fixed": {
+   "rotation": [
+    0,
+    180,
+    0
+   ],
+   "translation": [
+    0,
+    0,
+    0
+   ],
+   "scale": [
+    1,
+    1,
+    1
+   ]
+  },
+  "thirdperson_righthand": {
+   "rotation": [
+    0,
+    90,
+    0
+   ],
+   "translation": [
+    0,
+    3,
+    1
+   ],
+   "scale": [
+    0.55,
+    0.55,
+    0.55
+   ]
+  },
+  "thirdperson_lefthand": {
+   "rotation": [
+    0,
+    90,
+    0
+   ],
+   "translation": [
+    0,
+    3,
+    1
+   ],
+   "scale": [
+    0.55,
+    0.55,
+    0.55
+   ]
+  },
+  "firstperson_righthand": {
+   "rotation": [
+    0,
+    -70,
+    10
+   ],
+   "translation": [
+    1.5,
+    3,
+    1
+   ],
+   "scale": [
+    0.68,
+    0.68,
+    0.68
+   ]
+  },
+  "firstperson_lefthand": {
+   "rotation": [
+    0,
+    70,
+    -10
+   ],
+   "translation": [
+    1.5,
+    3,
+    1
+   ],
+   "scale": [
+    0.68,
+    0.68,
+    0.68
+   ]
+  }
+ },
+ "overrides": [
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.01
+   },
+   "model": "mtgcraft:item/pack_overworld"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.02
+   },
+   "model": "mtgcraft:item/pack_creeper"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.03
+   },
+   "model": "mtgcraft:item/pack_undead"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.04
+   },
+   "model": "mtgcraft:item/pack_night"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.05
+   },
+   "model": "mtgcraft:item/pack_nether"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.06
+   },
+   "model": "mtgcraft:item/pack_end"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.07
+   },
+   "model": "mtgcraft:item/pack_ocean"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.08
+   },
+   "model": "mtgcraft:item/pack_village"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.09
+   },
+   "model": "mtgcraft:item/pack_raid"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.1
+   },
+   "model": "mtgcraft:item/pack_witch"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.11
+   },
+   "model": "mtgcraft:item/pack_sculk"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.12
+   },
+   "model": "mtgcraft:item/pack_ender_dragon"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.13
+   },
+   "model": "mtgcraft:item/pack_wither"
+  }
+ ]
+}

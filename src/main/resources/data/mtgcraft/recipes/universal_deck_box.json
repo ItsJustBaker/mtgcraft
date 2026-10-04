@@ -1,0 +1,18 @@
+{
+ "type": "minecraft:crafting_shapeless",
+ "category": "misc",
+ "ingredients": [
+  {
+   "item": "mtgcraft:deck_box"
+  },
+  {
+   "item": "minecraft:book"
+  },
+  {
+   "item": "minecraft:diamond"
+  }
+ ],
+ "result": {
+  "item": "mtgcraft:universal_deck_box"
+ }
+}

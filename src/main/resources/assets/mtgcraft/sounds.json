@@ -1,0 +1,6 @@
+{
+  "duel_start": {
+    "subtitle": "mtgcraft.subtitle.duel_start",
+    "sounds": [ { "name": "mtgcraft:duel_start", "stream": false } ]
+  }
+}
