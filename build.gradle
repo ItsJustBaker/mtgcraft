@@ -74,6 +74,10 @@ minecraft {
             // Please read: https://stackoverflow.com/questions/2031163/when-to-use-the-different-log-levels
             property 'forge.logging.console.level', 'info'
 
+            // `-PdevDuel` turns on the developer duel harness (dev/DevDuel): a ready-made gauntlet duel with
+            // screenshots, for checking the duel screen without playing (start runServer, then runClient).
+            if (project.hasProperty('devDuel')) property 'mtgcraft.devDuel', 'true'
+
             mods {
                 "${mod_id}" {
                     source sourceSets.main
@@ -83,6 +87,7 @@ minecraft {
 
         client {
             jvmArgs '-Xmx4G'
+            if (project.hasProperty('devDuel')) args '--quickPlayMultiplayer', 'localhost:25565'
             // Comma-separated list of namespaces to load gametests from. Empty = all namespaces.
             property 'forge.enabledGameTestNamespaces', mod_id
         }

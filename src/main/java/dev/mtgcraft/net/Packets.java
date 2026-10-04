@@ -42,15 +42,19 @@ public final class Packets {
         }
     }
 
-    /** Tells a client that a duel it's seated in is starting; its traffic uses {@code session}. */
-    public record DuelStart(int session, BlockPos table) {
+    /**
+     * Tells a client that a duel it's seated in is starting; its traffic uses {@code session}. {@code gauntlet} is
+     * true for a Duel Gauntlet fight (no table to go back to afterwards).
+     */
+    public record DuelStart(int session, BlockPos table, boolean gauntlet) {
         public void write(FriendlyByteBuf buf) {
             buf.writeVarInt(session);
             buf.writeBlockPos(table);
+            buf.writeBoolean(gauntlet);
         }
 
         public static DuelStart read(FriendlyByteBuf buf) {
-            return new DuelStart(buf.readVarInt(), buf.readBlockPos());
+            return new DuelStart(buf.readVarInt(), buf.readBlockPos(), buf.readBoolean());
         }
 
         public void handle(Supplier<NetworkEvent.Context> ctx) {
