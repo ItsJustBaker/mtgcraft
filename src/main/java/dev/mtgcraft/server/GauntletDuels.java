@@ -61,7 +61,10 @@ public final class GauntletDuels {
         /** Human players in seat order, with their seat index. */
         final Map<UUID, Integer> players = new LinkedHashMap<>();
         final Set<UUID> forfeited = new HashSet<>();
+        /** One mob per mob seat. A jockey (a mob riding another) sits as one seat: this is its bottom mount. */
         final List<Mob> mobs = new ArrayList<>();
+        /** Every mob at the table: the seat mobs plus whoever rides them. */
+        final List<Mob> everyone = new ArrayList<>();
         final Map<UUID, Boolean> hadNoAi = new HashMap<>();
         MatchSetup setup;
         DuelHosting.Handle live;
@@ -149,20 +152,33 @@ public final class GauntletDuels {
             if (deck != null) humans.put(other, deck);
         }
 
-        d.mobs.add(target);
+        // A jockey (skeleton on a spider, zombie on a chicken...) is one opponent, not two.
+        Mob seat = mount(target);
+        d.mobs.add(seat);
         if (!d.boss) {
             // Mobs of the same kind join first, then other hostile mobs nearby.
-            List<Mob> near = d.level.getEntitiesOfClass(Mob.class, target.getBoundingBox().inflate(10),
-                    m -> m != target && m.isAlive() && !inDuel(m.getUUID())
-                            && (m.getType() == target.getType() || m instanceof Enemy) && !MobThemes.isBoss(m));
-            near.sort(Comparator.<Mob>comparingInt(m -> m.getType() == target.getType() ? 0 : 1)
-                    .thenComparingDouble(m -> m.distanceToSqr(target)));
+            String kind = teamKey(seat);
+            Set<Mob> seen = new HashSet<>(group(seat));
+            List<Mob> near = new ArrayList<>();
+            for (Mob m : d.level.getEntitiesOfClass(Mob.class, seat.getBoundingBox().inflate(10), Mob::isAlive)) {
+                Mob root = mount(m);
+                if (!seen.add(root) || !root.isAlive() || MobThemes.isBoss(root)) continue;
+                boolean free = true;
+                for (Mob g : group(root)) {
+                    seen.add(g);
+                    if (inDuel(g.getUUID()) || MobThemes.isBoss(g)) free = false;
+                }
+                if (free && (teamKey(root).equals(kind) || isHostile(root))) near.add(root);
+            }
+            near.sort(Comparator.<Mob>comparingInt(m -> teamKey(m).equals(kind) ? 0 : 1)
+                    .thenComparingDouble(m -> m.distanceToSqr(seat)));
             for (Mob m : near) {
                 if (humans.size() + d.mobs.size() >= MAX_SEATS) break;
                 d.mobs.add(m);
             }
         }
-        d.center = player.position().add(target.position()).scale(0.5);
+        for (Mob m : d.mobs) d.everyone.addAll(group(m));
+        d.center = player.position().add(seat.position()).scale(0.5);
 
         // Commander needs everyone at the table to bring a real 100-card deck with a commander;
         // otherwise this duel is played with classic rules.
@@ -191,7 +207,7 @@ public final class GauntletDuels {
         d.setup = setup;
 
         // Freeze everyone at the table.
-        for (Mob m : d.mobs) {
+        for (Mob m : d.everyone) {
             d.hadNoAi.put(m.getUUID(), m.isNoAi());
             m.setNoAi(true);
             m.setTarget(null);
@@ -204,7 +220,7 @@ public final class GauntletDuels {
 
         MinecraftServer server = player.getServer();
         BlockPos key = BlockPos.containing(d.center);
-        d.live = DuelHosting.launch(server, setup, key,
+        d.live = DuelHosting.launch(server, setup, key, true,
                 err -> {
                     tell(player, "The duel couldn't start: " + err);
                     end(d, null);
@@ -246,17 +262,52 @@ public final class GauntletDuels {
 
     /** Seats for the mobs: same kind = same team; themed decks (with a commander in Commander duels). */
     private static void addMobSeats(Duel d, MatchSetup setup, List<Entity> seatEntities, boolean commander) {
-        Map<EntityType<?>, Integer> teams = new LinkedHashMap<>();
+        Map<String, Integer> teams = new LinkedHashMap<>();
         Map<String, Integer> names = new HashMap<>();
         for (Mob m : d.mobs) {
-            int team = teams.computeIfAbsent(m.getType(), k -> teams.size() + 2);
-            String name = m.getDisplayName().getString();
+            int team = teams.computeIfAbsent(teamKey(m), k -> teams.size() + 2);
+            Mob face = rider(m);
+            String name = face == m ? m.getDisplayName().getString() : m.getDisplayName().getString() + " Jockey";
             int dup = names.merge(name, 1, Integer::sum);
             if (dup > 1) name += " " + dup;
             setup.seats.add(new MatchSetup.Seat(true, name, null,
-                    DeckChoice.theme(MobThemes.theme(m), MobThemes.packs(m), commander), team));
+                    DeckChoice.theme(MobThemes.theme(face), MobThemes.packs(face), commander), team));
             seatEntities.add(m);
         }
+    }
+
+    /** The bottom mount a mob is riding (itself if it isn't riding a mob). */
+    private static Mob mount(Mob m) {
+        Mob at = m;
+        while (at.getVehicle() instanceof Mob v) at = v;
+        return at;
+    }
+
+    /** A seat mob and everyone riding it. */
+    private static List<Mob> group(Mob root) {
+        List<Mob> out = new ArrayList<>();
+        out.add(root);
+        for (Entity e : root.getIndirectPassengers()) if (e instanceof Mob m) out.add(m);
+        return out;
+    }
+
+    /** The mob that gives a jockey its deck theme: the hostile rider on top (the skeleton, not the spider). */
+    private static Mob rider(Mob root) {
+        List<Mob> g = group(root);
+        for (int i = g.size() - 1; i > 0; i--) if (g.get(i) instanceof Enemy) return g.get(i);
+        return g.size() > 1 ? g.get(g.size() - 1) : root;
+    }
+
+    /** Mobs with the same key team up: same kind, and for jockeys the same mount and rider. */
+    private static String teamKey(Mob root) {
+        StringBuilder key = new StringBuilder();
+        for (Mob m : group(root)) key.append(EntityType.getKey(m.getType())).append('+');
+        return key.toString();
+    }
+
+    private static boolean isHostile(Mob root) {
+        for (Mob m : group(root)) if (m instanceof Enemy) return true;
+        return false;
     }
 
     /** Applies the stakes and unfreezes everyone. {@code result} null means the duel never really happened. */
@@ -264,7 +315,7 @@ public final class GauntletDuels {
         if (d.over) return;
         d.over = true;
         for (UUID id : d.players.keySet()) BY_PLAYER.remove(id);
-        for (Mob m : d.mobs) {
+        for (Mob m : d.everyone) {
             BY_MOB.remove(m.getUUID());
             if (m.isAlive()) m.setNoAi(d.hadNoAi.getOrDefault(m.getUUID(), false));
         }
@@ -286,10 +337,14 @@ public final class GauntletDuels {
             for (ServerPlayer p : online) {
                 p.displayClientMessage(Component.literal("Victory!").withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD), true);
             }
-            for (Mob m : d.mobs) {
+            // Every mob at the table falls. A jockey drops one set of loot (from its rider).
+            for (Mob seat : d.mobs) {
+                DEFEATED.add(rider(seat).getUUID());
+            }
+            for (Mob m : d.everyone) {
                 if (!m.isAlive()) continue;
-                DEFEATED.add(m.getUUID());
                 m.hurt(credit != null ? credit.damageSources().playerAttack(credit) : m.damageSources().magic(), Float.MAX_VALUE);
+                if (m.isAlive()) m.kill();
             }
             return;
         }
@@ -353,7 +408,7 @@ public final class GauntletDuels {
             if (d.over) continue;
             runeCircle(d);
             if (looker != null) {
-                for (Mob m : d.mobs) if (m.isAlive()) m.lookAt(EntityAnchorArgument.Anchor.EYES, looker.getEyePosition());
+                for (Mob m : d.everyone) if (m.isAlive()) m.lookAt(EntityAnchorArgument.Anchor.EYES, looker.getEyePosition());
             }
         }
     }

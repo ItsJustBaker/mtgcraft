@@ -85,8 +85,11 @@ public final class Matches {
                 try {
                     var outcome = match.getGame().getOutcome();
                     if (outcome != null && !outcome.isDraw()) {
-                        var winner = outcome.getWinningLobbyPlayer();
-                        r = new Result(false, outcome.getWinningTeam(), winner == null ? "" : winner.getName());
+                        // Card-Forge only fills in getWinningTeam() when the game ended by "all opposing teams
+                        // lost"; a plain last-player-standing win leaves it at -1. Read the winner's team instead.
+                        RegisteredPlayer winner = outcome.getWinningPlayer();
+                        int team = winner != null ? winner.getTeamNumber() : outcome.getWinningTeam();
+                        r = new Result(false, team, winner == null ? "" : winner.getPlayer().getName());
                     }
                 } catch (RuntimeException ignored) {
                     // no outcome available; report a draw

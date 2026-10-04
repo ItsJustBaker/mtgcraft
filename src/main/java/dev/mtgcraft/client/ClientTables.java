@@ -18,6 +18,8 @@ public final class ClientTables {
     private static final Map<Integer, RemoteDuel> DUELS = new ConcurrentHashMap<>();
     /** The duel at each table this player is in. */
     private static final Map<BlockPos, RemoteDuel> DUEL_AT = new ConcurrentHashMap<>();
+    /** Keys of duels that are Duel Gauntlet fights rather than table games. */
+    private static final java.util.Set<BlockPos> GAUNTLET = ConcurrentHashMap.newKeySet();
     private static boolean sentReady;
 
     private ClientTables() {}
@@ -28,6 +30,11 @@ public final class ClientTables {
 
     public static RemoteDuel duelAt(BlockPos table) {
         return DUEL_AT.get(table);
+    }
+
+    /** Whether the duel at this key is a Duel Gauntlet fight (it has no table lobby to return to). */
+    public static boolean isGauntlet(BlockPos key) {
+        return GAUNTLET.contains(key);
     }
 
     /** Right-click on a table: back into a running duel, or the table's lobby. */
@@ -56,6 +63,8 @@ public final class ClientTables {
         RemoteDuel duel = new RemoteDuel(data -> Net.toServer(new Packets.Tunnel(msg.session(), data)));
         DUELS.put(msg.session(), duel);
         DUEL_AT.put(msg.table(), duel);
+        if (msg.gauntlet()) GAUNTLET.add(msg.table());
+        else GAUNTLET.remove(msg.table());
         Minecraft mc = Minecraft.getInstance();
         mc.execute(() -> DuelIntro.play(() -> mc.setScreen(new DuelScreen(duel.gui, msg.table()))));
     }
