@@ -1,6 +1,303 @@
 {
- "parent": "item/generated",
  "textures": {
-  "layer0": "mtgcraft:item/universal_deck_box"
+  "front": "mtgcraft:item/udeckbox3d_front",
+  "side": "mtgcraft:item/udeckbox3d_side",
+  "lid": "mtgcraft:item/udeckbox3d_lid",
+  "cards": "mtgcraft:item/deckbox3d_cards",
+  "particle": "mtgcraft:item/udeckbox3d_front"
+ },
+ "gui_light": "side",
+ "elements": [
+  {
+   "from": [
+    4,
+    0,
+    5
+   ],
+   "to": [
+    12,
+    9,
+    11
+   ],
+   "faces": {
+    "north": {
+     "texture": "#front"
+    },
+    "south": {
+     "texture": "#front"
+    },
+    "east": {
+     "texture": "#side"
+    },
+    "west": {
+     "texture": "#side"
+    },
+    "down": {
+     "texture": "#side"
+    }
+   }
+  },
+  {
+   "from": [
+    4.5,
+    9,
+    5.5
+   ],
+   "to": [
+    11.5,
+    10.5,
+    10.5
+   ],
+   "faces": {
+    "north": {
+     "texture": "#cards"
+    },
+    "south": {
+     "texture": "#cards"
+    },
+    "east": {
+     "texture": "#cards"
+    },
+    "west": {
+     "texture": "#cards"
+    }
+   }
+  },
+  {
+   "from": [
+    3.7,
+    10.5,
+    4.7
+   ],
+   "to": [
+    12.3,
+    13,
+    11.3
+   ],
+   "faces": {
+    "north": {
+     "texture": "#side",
+     "uv": [
+      0,
+      5,
+      16,
+      10
+     ]
+    },
+    "south": {
+     "texture": "#side",
+     "uv": [
+      0,
+      5,
+      16,
+      10
+     ]
+    },
+    "east": {
+     "texture": "#side",
+     "uv": [
+      0,
+      5,
+      16,
+      10
+     ]
+    },
+    "west": {
+     "texture": "#side",
+     "uv": [
+      0,
+      5,
+      16,
+      10
+     ]
+    },
+    "up": {
+     "texture": "#lid"
+    },
+    "down": {
+     "texture": "#side"
+    }
+   }
+  },
+  {
+   "from": [
+    7.25,
+    7,
+    4.6
+   ],
+   "to": [
+    8.75,
+    11.5,
+    5
+   ],
+   "faces": {
+    "north": {
+     "texture": "#lid",
+     "uv": [
+      6,
+      6,
+      10,
+      10
+     ]
+    },
+    "east": {
+     "texture": "#lid",
+     "uv": [
+      6,
+      6,
+      10,
+      10
+     ]
+    },
+    "west": {
+     "texture": "#lid",
+     "uv": [
+      6,
+      6,
+      10,
+      10
+     ]
+    },
+    "up": {
+     "texture": "#lid",
+     "uv": [
+      6,
+      6,
+      10,
+      10
+     ]
+    },
+    "down": {
+     "texture": "#lid",
+     "uv": [
+      6,
+      6,
+      10,
+      10
+     ]
+    }
+   }
+  }
+ ],
+ "display": {
+  "gui": {
+   "rotation": [
+    30,
+    225,
+    0
+   ],
+   "translation": [
+    0,
+    1,
+    0
+   ],
+   "scale": [
+    0.95,
+    0.95,
+    0.95
+   ]
+  },
+  "ground": {
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "translation": [
+    0,
+    3,
+    0
+   ],
+   "scale": [
+    0.5,
+    0.5,
+    0.5
+   ]
+  },
+  "fixed": {
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "translation": [
+    0,
+    0,
+    0
+   ],
+   "scale": [
+    0.9,
+    0.9,
+    0.9
+   ]
+  },
+  "thirdperson_righthand": {
+   "rotation": [
+    75,
+    45,
+    0
+   ],
+   "translation": [
+    0,
+    2.5,
+    0
+   ],
+   "scale": [
+    0.45,
+    0.45,
+    0.45
+   ]
+  },
+  "thirdperson_lefthand": {
+   "rotation": [
+    75,
+    45,
+    0
+   ],
+   "translation": [
+    0,
+    2.5,
+    0
+   ],
+   "scale": [
+    0.45,
+    0.45,
+    0.45
+   ]
+  },
+  "firstperson_righthand": {
+   "rotation": [
+    0,
+    45,
+    0
+   ],
+   "translation": [
+    0,
+    2,
+    0
+   ],
+   "scale": [
+    0.55,
+    0.55,
+    0.55
+   ]
+  },
+  "firstperson_lefthand": {
+   "rotation": [
+    0,
+    225,
+    0
+   ],
+   "translation": [
+    0,
+    2,
+    0
+   ],
+   "scale": [
+    0.55,
+    0.55,
+    0.55
+   ]
+  }
  }
 }

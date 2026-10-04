@@ -15,6 +15,7 @@ import forge.game.phase.PhaseType;
 import forge.game.player.PlayerView;
 import forge.game.spellability.StackItemView;
 import forge.game.zone.ZoneType;
+import forge.model.FModel;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
@@ -28,6 +29,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -37,12 +39,12 @@ import java.util.Set;
  * toward its spot, so draws, casts, attacks and deaths all animate without any per-action code.
  *
  * <p>Controls: drag a card from your hand onto the table to play it (or onto a creature/player to aim it); drag a
- * creature toward the opponent to attack; drag your creature onto an attacker to block; click anything to
- * select it; right-click to take a creature out of combat; Space for the main button; hold Tab to peek under
- * a question.
+ * creature toward an opponent to attack (also from your main phase); drag your creature onto an attacker to block;
+ * click anything to select it; right-click to take a creature out of combat, or a player to see their zones;
+ * Space for the main button; Z for zones, L for the log; hold Tab to peek under a question.
  */
 public class DuelScreen extends Screen {
-    private enum Zone { HAND, BATTLEFIELD, STACK, PILE, CHOICE }
+    private enum Zone { HAND, BATTLEFIELD, STACK, COMMAND, TRAY }
 
     /** Where a card is drawn this frame. */
     private static final class Placed {
@@ -80,6 +82,13 @@ public class DuelScreen extends Screen {
     /** One opponent's slice of the top half of the board. */
     private record Column(PlayerView player, float x0, float x1, float pillY) {}
 
+    /** A clickable spot drawn this frame (chips, tool buttons, tabs). */
+    private record Hit(float x, float y, float w, float h, Runnable action) {
+        boolean contains(double mx, double my) {
+            return mx >= x && mx < x + w && my >= y && my < y + h;
+        }
+    }
+
     private final DuelGui duel;
     private final net.minecraft.core.BlockPos table;
     /** Opponents in turn order after me, each with their column; refreshed every frame. */
@@ -92,12 +101,13 @@ public class DuelScreen extends Screen {
     private final Map<Integer, Anim> anims = new HashMap<>();
     private List<Placed> placed = new ArrayList<>();
     private long lastFrame = System.currentTimeMillis();
+    private final List<Hit> hits = new ArrayList<>();
 
     // layout
     private int sideW, boardW, rowX0, rowX1;
     private float cardW, cardH, handW, handH, midY, handTop;
     private float oppLandsY, oppCreY, myCreY, myLandsY;
-    private int oppPillY, myPillY, zoomX, zoomY, zoomW, zoomH, promptY, buttonsY;
+    private int oppPillY, myPillY, zoomX, zoomY, zoomW, zoomH, promptY, buttonsY, toolsY;
 
     // interaction
     private Placed pressed;
@@ -111,6 +121,15 @@ public class DuelScreen extends Screen {
     private boolean confirmConcede;
     private int lastHandSize = -1;
 
+    // creatures dragged at an opponent before combat: declared as soon as the attack step starts
+    private final Set<Integer> queuedAttack = new LinkedHashSet<>();
+    private PlayerView queuedDefender;
+    private int queuedTurn = -1;
+
+    // cards to choose that aren't on the table (graveyard targets, revealed cards...)
+    private String trayLabel = "";
+    private float trayX, trayY, trayW, trayH;
+
     // big hover preview
     private static final long PREVIEW_DELAY_MS = 220;
     private CardView choiceHover;
@@ -120,9 +139,19 @@ public class DuelScreen extends Screen {
     // choice overlay
     private ChoiceRequest shownRequest;
     private final List<Integer> picked = new ArrayList<>();
+    private final List<Integer> distValues = new ArrayList<>();
     private int numberValue;
     private int optionScroll;
     private boolean peeking;
+
+    // zone viewer and log
+    private boolean viewerOpen;
+    private PlayerView viewerFor;
+    private ZoneType viewerZone = ZoneType.Graveyard;
+    private int viewerScroll;
+    private CardView viewerHover;
+    private final List<Hit> viewerHits = new ArrayList<>();
+    private boolean showLog;
 
     public DuelScreen(DuelGui duel, net.minecraft.core.BlockPos table) {
         super(Component.literal("Magic Table"));
@@ -155,7 +184,7 @@ public class DuelScreen extends Screen {
         oppPillY = 4;
         myPillY = height - 40;
         int zoomTop = oppPillY + 36 + 18;
-        int maxZoomH = height - zoomTop - 40 - 30 - 46;
+        int maxZoomH = height - zoomTop - 40 - 30 - 46 - 14;
         zoomW = sideW - 12;
         zoomH = (int) (zoomW * 88f / 63f);
         if (zoomH > maxZoomH) {
@@ -166,6 +195,7 @@ public class DuelScreen extends Screen {
         zoomY = zoomTop;
         promptY = zoomY + zoomH + 4;
         buttonsY = myPillY - 28;
+        toolsY = buttonsY - 16;
     }
 
     // ------------------------------------------------------------------ frame
@@ -196,10 +226,23 @@ public class DuelScreen extends Screen {
         }
     }
 
+    /** A zone's cards as a list (empty while it hasn't synced, or if the game thread is mid-change). */
+    private static List<CardView> cards(Iterable<CardView> zone) {
+        List<CardView> out = new ArrayList<>();
+        if (zone == null) return out;
+        try {
+            for (CardView c : zone) if (c != null) out.add(c);
+        } catch (RuntimeException concurrentEdit) {
+            // keep what we have
+        }
+        return out;
+    }
+
     private void renderFrame(GuiGraphics g, int mouseX, int mouseY) {
         long now = System.currentTimeMillis();
         float dt = Math.min(0.1f, (now - lastFrame) / 1000f);
         lastFrame = now;
+        hits.clear();
 
         boolean arena = arenaActive();
         if (arena) {
@@ -234,33 +277,37 @@ public class DuelScreen extends Screen {
         ChoiceRequest req = duel.currentRequest();
         syncRequest(req);
         boolean overlay = req != null && !peeking;
+        boolean viewer = viewerOpen && !overlay;
 
-        hovered = (overlay || dragging) ? null : topCardAt(mouseX, mouseY);
+        hovered = (overlay || viewer || dragging) ? null : topCardAt(mouseX, mouseY);
         if (!overlay && !dragging && hovered != null) zoomCard = hovered.card;
         if (dragging && pressed != null) zoomCard = pressed.card;
 
         animate(dt, mouseX, mouseY);
         resolvePendingTarget();
+        updateQueuedAttack(view, me);
         handSound(me);
 
         drawMiddleLine(g);
         if (!arena) drawPiles(g, me, opp);
-        drawCombatLines(g, view);
-        drawCards(g, mouseX, mouseY, now);
+        drawTrayBacking(g);
+        drawCombatLines(g, view, mouseX, mouseY);
+        drawCards(g, now);
+        drawCommanderTags(g, me);
         drawStackLabel(g, view);
+        if (!overlay) drawStepBanner(g, view, me, req);
         drawSidebar(g, view, me, opp, mouseX, mouseY, now);
+        if (showLog && !overlay) drawLog(g, view);
+        viewerHover = null;
+        if (viewer) drawViewer(g, view, me, mouseX, mouseY, now);
+        else if (!overlay && startingPlayerPrompt()) drawStarterPicker(g, view, mouseX, mouseY);
         choiceHover = null;
-        if (overlay) {
-            drawChoice(g, req, mouseX, mouseY, now);
-        } else if (req != null) {
-            g.drawCenteredString(font, "Release Tab to answer: " + Theme.ellipsize(font, req.message, boardW - 60),
-                    boardW / 2, 4, Theme.GOLD);
-        }
+        if (overlay) drawChoice(g, req, mouseX, mouseY, now);
         if (duel.isOver() && req == null) {
             drawGameOver(g, view, me, mouseX, mouseY);
         }
-        if (!overlay) drawViewToggle(g, mouseX, mouseY);
-        drawBigPreview(g, overlay ? choiceHover : hovered == null ? null : hovered.card, mouseX, now);
+        CardView preview = overlay ? choiceHover : viewer ? viewerHover : hovered == null ? null : hovered.card;
+        drawBigPreview(g, preview, mouseX, now);
     }
 
     /**
@@ -303,6 +350,11 @@ public class DuelScreen extends Screen {
 
     private boolean multiplayer() {
         return columns.size() > 1;
+    }
+
+    private boolean myTurn(GameView view) {
+        PlayerView me = duel.me();
+        return me != null && view.getPlayerTurn() != null && view.getPlayerTurn().getId() == me.getId();
     }
 
     /**
@@ -372,8 +424,10 @@ public class DuelScreen extends Screen {
             layoutBattlefield(out, c.player(), false, c.x0() + pad, c.x1() - pad, oppLandsY, oppCreY, oppCardW, oppCardH);
         }
         layoutBattlefield(out, me, true, rowX0, rowX1, myLandsY, myCreY, cardW, cardH);
-        layoutStack(out, view);
         layoutHand(out, me);
+        layoutCommand(out, me);
+        boolean tray = layoutTray(out, view, me);
+        layoutStack(out, view, tray);
         applyCombatOffsets(out, view);
         return out;
     }
@@ -430,14 +484,15 @@ public class DuelScreen extends Screen {
         }
     }
 
-    private void layoutStack(List<Placed> out, GameView view) {
+    private void layoutStack(List<Placed> out, GameView view, boolean trayShown) {
         List<StackItemView> stack = new ArrayList<>((java.util.Collection<StackItemView>) view.getStack());
         int n = stack.size();
         if (n == 0) return;
         float w = cardW * 1.05f, h = cardH * 1.05f;
         float step = Math.min(w * 0.55f, (rowX1 - rowX0 - w) / Math.max(1, n));
-        float cx = (rowX0 + rowX1) / 2f;
-        float x = cx + (n - 1) * step / 2f - w / 2;
+        // With the pick tray open in the middle, the stack moves to the right edge.
+        float cx = trayShown ? rowX1 - w / 2 - 4 : (rowX0 + rowX1) / 2f;
+        float x = cx + (trayShown ? 0 : (n - 1) * step / 2f) - w / 2;
         // The top of the stack is index 0; draw it last (in front, rightmost).
         for (int i = n - 1; i >= 0; i--) {
             CardView src = stack.get(i).getSourceCard();
@@ -447,7 +502,7 @@ public class DuelScreen extends Screen {
     }
 
     private void layoutHand(List<Placed> out, PlayerView me) {
-        List<CardView> hand = me.getHand() == null ? List.of() : new ArrayList<>((java.util.Collection<CardView>) me.getHand());
+        List<CardView> hand = cards(me.getHand());
         int n = hand.size();
         if (n == 0) return;
         float maxSpan = boardW * 0.62f;
@@ -462,6 +517,79 @@ public class DuelScreen extends Screen {
             p.side = me.getId();
             out.add(p);
         }
+    }
+
+    /** My commander(s) wait in the bottom-left corner, beside the hand; click or drag one out to cast it. */
+    private void layoutCommand(List<Placed> out, PlayerView me) {
+        List<CardView> cmd = new ArrayList<>();
+        for (CardView c : cards(me.getCommand())) if (c.isCommander()) cmd.add(c);
+        float w = handW * 0.85f, h = handH * 0.85f;
+        for (int i = 0; i < cmd.size(); i++) {
+            Placed p = new Placed(cmd.get(i), Zone.COMMAND, true, false, 6 + i * w * 0.55f, handTop + 4, w, h, 0);
+            p.side = me.getId();
+            out.add(p);
+        }
+    }
+
+    /**
+     * Cards the game wants picked that aren't on the table (a creature in a graveyard to bring back, a card in
+     * exile...) and cards it's showing (scry, reveal) appear in a tray in the middle of the board.
+     */
+    private boolean layoutTray(List<Placed> out, GameView view, PlayerView me) {
+        Set<Integer> shown = new HashSet<>();
+        for (Placed p : out) shown.add(p.card.getId());
+        List<CardView> tray = new ArrayList<>();
+        Set<String> from = new LinkedHashSet<>();
+        boolean revealed = false;
+        for (CardView c : duel.revealed) {
+            if (shown.add(c.getId())) {
+                tray.add(c);
+                revealed = true;
+            }
+        }
+        if (duel.isSelecting()) {
+            for (PlayerView p : view.getPlayers()) {
+                for (ZoneType z : new ZoneType[]{ZoneType.Graveyard, ZoneType.Exile, ZoneType.Command, ZoneType.Library, ZoneType.Hand}) {
+                    for (CardView c : cards(p.getCards(z))) {
+                        if (duel.isSelectable(c) && shown.add(c.getId())) {
+                            tray.add(c);
+                            from.add((p.getId() == me.getId() ? "your " : p.getName() + "'s ") + zoneName(z).toLowerCase());
+                        }
+                    }
+                }
+            }
+        }
+        if (tray.isEmpty()) {
+            trayLabel = "";
+            return false;
+        }
+        trayLabel = from.isEmpty() ? (revealed ? "Revealed" : "") : "Choose from " + String.join(", ", from);
+        float h = cardH * 1.15f, w = h * 63f / 88f;
+        int n = tray.size();
+        float maxW = (rowX1 - rowX0) * 0.7f;
+        float step = n == 1 ? 0 : Math.min(w + 4, (maxW - w) / (n - 1));
+        float total = step * (n - 1) + w;
+        trayX = rowX0 + 4;
+        trayY = midY - h / 2;
+        trayW = total + 12;
+        trayH = h + 18;
+        for (int i = 0; i < n; i++) {
+            Placed p = new Placed(tray.get(i), Zone.TRAY, false, false, trayX + 6 + i * step, trayY + 12, w, h, 0);
+            out.add(p);
+        }
+        trayY -= 2;
+        return true;
+    }
+
+    private static String zoneName(ZoneType z) {
+        return switch (z) {
+            case Graveyard -> "Graveyard";
+            case Exile -> "Exile";
+            case Command -> "Command zone";
+            case Library -> "Library";
+            case Hand -> "Hand";
+            default -> z.name();
+        };
     }
 
     /** Attackers step toward the middle; blockers lean in to meet them. */
@@ -503,7 +631,7 @@ public class DuelScreen extends Screen {
             a.goneSince = 0;
 
             float tx = p.x, ty = p.y, trot = p.rot, tscale = 1;
-            if (p == hovered && p.zone == Zone.HAND) {
+            if (p == hovered && (p.zone == Zone.HAND || p.zone == Zone.COMMAND)) {
                 ty = height - p.h - 6;
                 trot = 0;
                 tscale = 1.12f;
@@ -549,6 +677,7 @@ public class DuelScreen extends Screen {
     /** New cards fly in from where they came from: your library for draws, the opponent's side for their plays. */
     private float[] spawnPoint(Placed p) {
         if (p.zone == Zone.HAND) return new float[]{6, myLandsY};
+        if (p.zone == Zone.TRAY || p.zone == Zone.COMMAND) return new float[]{p.x, p.y + 12};
         Column col = columnOf(p.side);
         if (col != null && multiplayer()) return new float[]{(col.x0() + col.x1()) / 2, -p.h};
         if (!p.mine) return new float[]{boardW + 20, oppPillY};
@@ -561,6 +690,38 @@ public class DuelScreen extends Screen {
             Theme.play(SoundEvents.BOOK_PAGE_TURN, 1.3f, 0.6f);
         }
         lastHandSize = size;
+    }
+
+    // ------------------------------------------------------------------ attacking from the main phase
+
+    /**
+     * Creatures dragged at an opponent during the main phase: the game moves on to combat and they're declared as
+     * attackers as soon as the attack step asks.
+     */
+    private void updateQueuedAttack(GameView view, PlayerView me) {
+        if (queuedAttack.isEmpty()) return;
+        if (!myTurn(view) || view.getTurn() != queuedTurn) {
+            clearQueuedAttack();
+            return;
+        }
+        PhaseType phase = view.getPhase();
+        if (phase == null) return;
+        if (phase == PhaseType.COMBAT_DECLARE_ATTACKERS) {
+            if (duel.prompt == null || duel.prompt.startsWith("Priority") || !duel.okEnabled) return;
+            CombatView combat = view.getCombat();
+            if (multiplayer() && queuedDefender != null) duel.clickPlayer(queuedDefender);
+            for (CardView c : cards(me.getBattlefield())) {
+                if (queuedAttack.contains(c.getId()) && (combat == null || !combat.isAttacking(c))) duel.clickCard(c, 1);
+            }
+            clearQueuedAttack();
+        } else if (phase.isAfter(PhaseType.COMBAT_DECLARE_ATTACKERS)) {
+            clearQueuedAttack();
+        }
+    }
+
+    private void clearQueuedAttack() {
+        queuedAttack.clear();
+        queuedDefender = null;
     }
 
     // ------------------------------------------------------------------ drawing: board
@@ -577,6 +738,7 @@ public class DuelScreen extends Screen {
         drawPile(g, me, 6, myLandsY, myCreY);
     }
 
+    /** Library and graveyard at the left edge; click either to look through it. */
     private void drawPile(GuiGraphics g, PlayerView p, float x, float libY, float gyY) {
         int lib = p.getZoneSize(ZoneType.Library);
         if (lib > 0) {
@@ -585,14 +747,16 @@ public class DuelScreen extends Screen {
             }
         }
         label(g, String.valueOf(lib), x + cardW / 2, libY + cardH - 9);
-        List<CardView> gy = p.getGraveyard() == null ? List.of() : new ArrayList<>((java.util.Collection<CardView>) p.getGraveyard());
+        hits.add(new Hit(x, libY, cardW, cardH, () -> openViewer(p, ZoneType.Library)));
+        List<CardView> gy = cards(p.getGraveyard());
         if (!gy.isEmpty()) {
             CardView top = gy.get(gy.size() - 1);
             drawCardFace(g, top, x, gyY, cardW, cardH, 0.85f);
-            label(g, String.valueOf(gy.size()), x + cardW / 2, gyY + cardH - 9);
+            label(g, "GY " + gy.size(), x + cardW / 2, gyY + cardH - 9);
         } else {
             Theme.rounded(g, (int) x, (int) gyY, (int) cardW, (int) cardH, 0x30000000);
         }
+        hits.add(new Hit(x, gyY, cardW, cardH, () -> openViewer(p, ZoneType.Graveyard)));
     }
 
     private void label(GuiGraphics g, String s, float cx, float y) {
@@ -601,26 +765,64 @@ public class DuelScreen extends Screen {
         g.drawCenteredString(font, s, (int) cx, (int) y, Theme.TEXT);
     }
 
-    private void drawCombatLines(GuiGraphics g, GameView view) {
+    private void drawTrayBacking(GuiGraphics g) {
+        if (!hasTray()) return;
+        int x = (int) trayX, y = (int) trayY, w = (int) trayW, h = (int) trayH;
+        Theme.rounded(g, x - 1, y - 1, w + 2, h + 2, Theme.SELECT);
+        Theme.rounded(g, x, y, w, h, 0xE0141A16);
+        if (!trayLabel.isEmpty()) {
+            g.pose().pushPose();
+            g.pose().translate(x + 5, y + 3, 0);
+            g.pose().scale(0.75f, 0.75f, 1);
+            g.drawString(font, Theme.ellipsize(font, trayLabel, (int) ((w - 10) / 0.75f)), 0, 0, Theme.GOLD, false);
+            g.pose().popPose();
+        }
+    }
+
+    private boolean hasTray() {
+        for (Placed p : placed) if (p.zone == Zone.TRAY) return true;
+        return false;
+    }
+
+    private void drawCombatLines(GuiGraphics g, GameView view, int mx, int my) {
         CombatView combat = view.getCombat();
-        if (combat == null) return;
-        for (CardView attacker : combat.getAttackers()) {
-            Anim a = anims.get(attacker.getId());
-            if (a == null) continue;
-            var blockers = combat.getBlockers(attacker);
-            if (blockers == null) continue;
-            for (CardView b : blockers) {
-                Anim bl = anims.get(b.getId());
-                if (bl == null) continue;
-                Theme.line(g, a.x + a.w / 2, a.y + a.h / 2, bl.x + bl.w / 2, bl.y + bl.h / 2, 2.5f, 0xC0E5534B);
+        if (combat != null) {
+            for (CardView attacker : combat.getAttackers()) {
+                Anim a = anims.get(attacker.getId());
+                if (a == null) continue;
+                var blockers = combat.getBlockers(attacker);
+                if (blockers == null) continue;
+                for (CardView b : blockers) {
+                    Anim bl = anims.get(b.getId());
+                    if (bl == null) continue;
+                    Theme.line(g, a.x + a.w / 2, a.y + a.h / 2, bl.x + bl.w / 2, bl.y + bl.h / 2, 2.5f, 0xC0E5534B);
+                }
+            }
+        }
+        // While dragging a blocker, show which attacker it would block.
+        if (dragging && pressed != null && combat != null && view.getPhase() == PhaseType.COMBAT_DECLARE_BLOCKERS) {
+            Anim src = anims.get(pressed.card.getId());
+            Placed target = attackerAt(combat, mx, my);
+            if (src != null && target != null) {
+                Anim t = anims.get(target.card.getId());
+                if (t != null) Theme.line(g, src.x + src.w / 2, src.y + src.h / 2, t.x + t.w / 2, t.y + t.h / 2, 3f, 0xE0FFD45A);
             }
         }
     }
 
-    private void drawCards(GuiGraphics g, int mx, int my, long now) {
+    private Placed attackerAt(CombatView combat, double mx, double my) {
+        for (Placed p : placed) {
+            if (p.zone != Zone.BATTLEFIELD || (pressed != null && p.card.getId() == pressed.card.getId())) continue;
+            Anim a = anims.get(p.card.getId());
+            if (a != null && p.contains(mx, my, a) && combat.isAttacking(p.card)) return p;
+        }
+        return null;
+    }
+
+    private void drawCards(GuiGraphics g, long now) {
         Placed draggedP = dragging ? pressed : null;
-        // Order: battlefield, stack, hand, then whatever is hovered or dragged on top.
-        for (Zone z : new Zone[]{Zone.BATTLEFIELD, Zone.STACK, Zone.HAND}) {
+        // Order: battlefield, stack, commanders, hand, the pick tray, then whatever is hovered or dragged on top.
+        for (Zone z : new Zone[]{Zone.BATTLEFIELD, Zone.STACK, Zone.COMMAND, Zone.HAND, Zone.TRAY}) {
             for (Placed p : placed) {
                 if (p.zone != z || p == hovered || (draggedP != null && p.card.getId() == draggedP.card.getId())) continue;
                 drawPlaced(g, p, now);
@@ -629,37 +831,34 @@ public class DuelScreen extends Screen {
         for (Map.Entry<Integer, Anim> e : anims.entrySet()) {
             Anim a = e.getValue();
             if (a.goneSince != 0 && a.card != null) {
-                drawCardAt(g, a.card, a, a.hidden, false, now, false);
+                drawCardAt(g, a.card, a, a.hidden, now, false);
             }
         }
         if (hovered != null) drawPlaced(g, hovered, now);
         if (draggedP != null) {
             Anim a = anims.get(draggedP.card.getId());
-            if (a != null) drawCardAt(g, draggedP.card, a, false, false, now, true);
+            if (a != null) drawCardAt(g, draggedP.card, a, false, now, true);
         }
     }
 
     private void drawPlaced(GuiGraphics g, Placed p, long now) {
         Anim a = anims.get(p.card.getId());
         if (a == null) return;
-        if (arenaActive() && p.zone == Zone.BATTLEFIELD && p != hovered) {
+        boolean battlefield = p.zone == Zone.BATTLEFIELD;
+        if (arenaActive() && battlefield && p != hovered) {
             // In arena view the battlefield lives in the world; keep faint 2D copies for clicking and dragging.
             float keep = a.alpha;
             a.alpha = keep * 0.3f;
-            drawCardAt(g, p.card, a, p.hidden, true, now, false);
+            drawCardAt(g, p.card, a, p.hidden, now, false);
             a.alpha = keep;
-            return;
+        } else {
+            drawCardAt(g, p.card, a, p.hidden, now, false);
         }
-        drawCardAt(g, p.card, a, p.hidden, p.zone == Zone.BATTLEFIELD, now, false);
+        if (battlefield && !p.hidden && duel.mayView(p.card)) drawStatus(g, p.card, a);
     }
 
     private boolean arenaActive() {
         return arenaView && ArenaRenderer.has(table);
-    }
-
-    private void drawViewToggle(GuiGraphics g, int mx, int my) {
-        if (!ArenaRenderer.has(table)) return;
-        Theme.button(g, font, arenaView ? "View: Arena (V)" : "View: Screen (V)", boardW - 92, 2, 88, 13, mx, my, true, arenaView);
     }
 
     private void toggleView() {
@@ -667,7 +866,7 @@ public class DuelScreen extends Screen {
         Theme.click();
     }
 
-    private void drawCardAt(GuiGraphics g, CardView c, Anim a, boolean hidden, boolean onBattlefield, long now, boolean lifted) {
+    private void drawCardAt(GuiGraphics g, CardView c, Anim a, boolean hidden, long now, boolean lifted) {
         g.pose().pushPose();
         g.pose().translate(a.x + a.w / 2, a.y + a.h / 2, lifted ? 200 : 0);
         g.pose().mulPose(Axis.ZP.rotationDegrees(a.rot));
@@ -683,7 +882,10 @@ public class DuelScreen extends Screen {
             blitScaled(g, Theme.CARD_BACK, 0, 0, a.w, a.h, 126, 176, alpha);
         } else {
             drawCardFace(g, c, 0, 0, a.w, a.h, alpha);
-            if (onBattlefield) drawBadges(g, c, a.w, a.h);
+            // My creatures that can't attack or tap yet are dimmed.
+            if (c.isSick() && c.getController() != null && duel.isLocalPlayer(c.getController())) {
+                Theme.fillF(g, g.pose().last().pose(), 0, 0, a.w, a.h, 0x30000000);
+            }
         }
 
         int border = borderColor(c, now);
@@ -696,7 +898,13 @@ public class DuelScreen extends Screen {
             int pulse = (int) (150 + 105 * Math.sin(now / 160.0));
             return (pulse << 24) | (Theme.SELECT & 0xFFFFFF);
         }
+        if (queuedAttack.contains(c.getId())) {
+            int pulse = (int) (150 + 105 * Math.sin(now / 160.0));
+            return (pulse << 24) | (Theme.RED & 0xFFFFFF);
+        }
         if (c.isAttacking()) return Theme.RED;
+        CombatView combat = duel.getGameView() == null ? null : duel.getGameView().getCombat();
+        if (combat != null && combat.isBlocking(c)) return 0xFF4FB8E0;
         if (duel.isHighlighted(c)) return 0xFF58A6FF;
         if (hovered != null && hovered.card.getId() == c.getId()) return 0xD0FFFFFF;
         return 0;
@@ -764,31 +972,99 @@ public class DuelScreen extends Screen {
         return 0xFF5BAE6A;
     }
 
-    /** Power/toughness, damage, counters and loyalty on battlefield cards. */
-    private void drawBadges(GuiGraphics g, CardView c, float w, float h) {
+    // ------------------------------------------------------------------ status chips
+
+    private static final int CHIP_UP = 0xFF7BE07B, CHIP_DOWN = 0xFFFF7A6E, CHIP_SICK = 0xFFA9C2FF, CHIP_INFO = 0xFFB8F0FF;
+    /** Printed power/toughness by card name (empty array: none/unknown), to colour buffs and debuffs. */
+    private static final Map<String, int[]> PRINTED = new HashMap<>();
+
+    private static int[] printed(String name) {
+        return PRINTED.computeIfAbsent(name, n -> {
+            try {
+                var pc = FModel.getMagicDb().getCommonCards().getCard(n);
+                if (pc != null && pc.getRules() != null && pc.getRules().getType().isCreature()) {
+                    var r = pc.getRules();
+                    if (!String.valueOf(r.getPower()).contains("*") && !String.valueOf(r.getToughness()).contains("*")) {
+                        return new int[]{r.getIntPower(), r.getIntToughness()};
+                    }
+                }
+            } catch (RuntimeException ignored) {
+                // tokens and unknown cards have nothing to compare with
+            }
+            return new int[0];
+        });
+    }
+
+    /**
+     * Power/toughness, loyalty, counters and summoning sickness, drawn upright at the card's corners (also when the
+     * card is tapped sideways). Green means bigger than printed, red means smaller or damaged.
+     */
+    private void drawStatus(GuiGraphics g, CardView c, Anim a) {
         CardStateView s = c.getCurrentState();
-        float ts = Math.max(0.5f, Math.min(1f, w / 60f));
+        if (s == null) return;
+        boolean sideways = Math.abs(Math.sin(Math.toRadians(a.rot))) > 0.7;
+        float bw = (sideways ? a.h : a.w) * a.scale, bh = (sideways ? a.w : a.h) * a.scale;
+        float x0 = a.x + a.w / 2 - bw / 2, y0 = a.y + a.h / 2 - bh / 2;
+        float ts = Math.max(0.5f, Math.min(1f, Math.min(a.w, a.h) * a.scale / 60f));
+        g.pose().pushPose();
+        g.pose().translate(0, 0, 5);
         if (s.isCreature()) {
             int dmg = c.getDamage();
-            String pt = s.getPower() + "/" + (s.getToughness() - dmg);
-            badge(g, pt, w - 1, h - 1, ts, dmg > 0 ? 0xFFFF7A6E : Theme.TEXT, true);
+            int power = s.getPower(), tough = s.getToughness();
+            int[] base = printed(s.getName());
+            int color = Theme.TEXT;
+            if (dmg > 0 || (base.length == 2 && (power < base[0] || tough < base[1]))) color = CHIP_DOWN;
+            else if (base.length == 2 && (power > base[0] || tough > base[1])) color = CHIP_UP;
+            badge(g, power + "/" + (tough - dmg), x0 + bw - 1, y0 + bh - 1, ts, color, true);
+        } else if (s.isPlaneswalker() && s.getLoyalty() != null) {
+            badge(g, s.getLoyalty(), x0 + bw - 1, y0 + bh - 1, ts, 0xFFFFE08A, true);
         }
-        if (s.isPlaneswalker() && s.getLoyalty() != null) {
-            badge(g, s.getLoyalty(), w - 1, h - 1, ts, 0xFFFFE08A, true);
+
+        List<String> texts = new ArrayList<>();
+        List<Integer> colors = new ArrayList<>();
+        if (c.isSick()) {
+            texts.add("Zz");
+            colors.add(CHIP_SICK);
         }
         var counters = c.getCounters();
-        if (counters != null && !counters.isEmpty()) {
-            StringBuilder sb = new StringBuilder();
+        if (counters != null) {
             for (var type : counters.elementSet()) {
-                if (sb.length() > 0) sb.append(' ');
-                sb.append(type.getName()).append('×').append(counters.count(type));
+                int n = counters.count(type);
+                String name = type.getName();
+                if (name.equalsIgnoreCase("loyalty")) continue;
+                if (name.equals("+1/+1")) { texts.add("+" + n); colors.add(CHIP_UP); }
+                else if (name.equals("-1/-1")) { texts.add("-" + n); colors.add(CHIP_DOWN); }
+                else { texts.add(shortName(name) + (n > 1 ? n : "")); colors.add(CHIP_INFO); }
             }
-            badge(g, sb.toString(), 1, 1, ts * 0.85f, 0xFFB8F0FF, false);
         }
-        if (c.isSick() && s.isCreature() && c.getController() != null && duel.isLocalPlayer(c.getController())) {
-            var m = g.pose().last().pose();
-            Theme.fillF(g, m, 0, 0, w, h, 0x28000000);
+        float cs = ts * 0.8f, cy = y0 + 1;
+        for (int i = 0; i < texts.size(); i++) {
+            if (i == 3 && texts.size() > 4) {
+                badge(g, "+" + (texts.size() - 3), x0 + 1, cy, cs, Theme.MUTED, false);
+                break;
+            }
+            badge(g, texts.get(i), x0 + 1, cy, cs, colors.get(i), false);
+            cy += 11 * cs + 1;
         }
+
+        // In a multiplayer game, say who each attacker is going after.
+        CombatView combat = duel.getGameView() == null ? null : duel.getGameView().getCombat();
+        if (multiplayer() && combat != null && combat.isAttacking(c)) {
+            GameEntityView def = combat.getDefender(c);
+            if (def != null) {
+                String who = def instanceof PlayerView p && duel.isLocalPlayer(p) ? "You" : def.toString();
+                badge(g, "→ " + Theme.ellipsize(font, who, (int) (bw / cs)), x0 + 1, y0 + bh - 11 * cs - 1, cs, Theme.RED, false);
+            }
+        }
+        g.pose().popPose();
+    }
+
+    /** "Trample" → "Tra", "Charge" → "Cha": counter names short enough for a chip. */
+    private static String shortName(String name) {
+        String n = name.replace("_", " ").trim();
+        if (n.isEmpty()) return "?";
+        n = n.substring(0, 1).toUpperCase() + n.substring(1).toLowerCase();
+        return n.length() <= 4 ? n : n.substring(0, 3);
     }
 
     private void badge(GuiGraphics g, String text, float x, float y, float scale, int color, boolean rightBottom) {
@@ -813,6 +1089,18 @@ public class DuelScreen extends Screen {
         g.pose().popPose();
     }
 
+    /** Commander tax over my commanders in the corner. */
+    private void drawCommanderTags(GuiGraphics g, PlayerView me) {
+        for (Placed p : placed) {
+            if (p.zone != Zone.COMMAND || p == hovered) continue;
+            Anim a = anims.get(p.card.getId());
+            if (a == null) continue;
+            int casts = me.getCommanderCast(p.card);
+            String tag = casts > 0 ? "♛ +" + (2 * casts) : "♛";
+            badge(g, tag, a.x + 2, a.y + 2, 0.8f, Theme.GOLD, false);
+        }
+    }
+
     private void drawStackLabel(GuiGraphics g, GameView view) {
         int n = view.getStack().size();
         if (n == 0) return;
@@ -825,15 +1113,56 @@ public class DuelScreen extends Screen {
         g.drawCenteredString(font, Theme.ellipsize(font, text, w - 8), cx, y + 2, Theme.GOLD);
     }
 
+    /** A one-line instruction on the middle line for the steps people get stuck on (attacking, blocking). */
+    private void drawStepBanner(GuiGraphics g, GameView view, PlayerView me, ChoiceRequest req) {
+        String text = null;
+        int color = Theme.GOLD;
+        boolean myTurn = myTurn(view);
+        PhaseType phase = view.getPhase();
+        boolean priority = duel.prompt != null && duel.prompt.startsWith("Priority");
+        if (req != null) {
+            text = "Release Tab to answer: " + req.message;
+        } else if (!view.getStack().isEmpty() || hasTray()) {
+            return;
+        } else if (!queuedAttack.isEmpty()) {
+            text = "⚔ " + queuedAttack.size() + " ready to attack: moving to combat...";
+        } else if (myTurn && phase == PhaseType.COMBAT_DECLARE_ATTACKERS && !priority && duel.okEnabled) {
+            text = "⚔ Drag creatures at an opponent to attack, then press " + duel.okLabel;
+            color = Theme.RED;
+        } else if (!myTurn && phase == PhaseType.COMBAT_DECLARE_BLOCKERS && !priority && duel.okEnabled && defending(view, me)) {
+            text = "⛨ Drag your creatures onto attackers to block, then press " + duel.okLabel;
+            color = 0xFF7FD0F0;
+        }
+        if (text == null) return;
+        text = Theme.ellipsize(font, text, rowX1 - rowX0 - 20);
+        int w = font.width(text) + 12;
+        int cx = (rowX0 + rowX1) / 2, y = (int) midY - 7;
+        Theme.rounded(g, cx - w / 2 - 1, y - 1, w + 2, 15, color);
+        Theme.rounded(g, cx - w / 2, y, w, 13, 0xF0141A16);
+        g.drawCenteredString(font, text, cx, y + 3, color);
+    }
+
+    /** Whether any attacker is coming at me (or my planeswalkers). */
+    private boolean defending(GameView view, PlayerView me) {
+        CombatView combat = view.getCombat();
+        if (combat == null) return false;
+        for (CardView a : combat.getAttackers()) {
+            GameEntityView d = combat.getDefender(a);
+            if (d instanceof PlayerView p && p.getId() == me.getId()) return true;
+            if (d instanceof CardView c && c.getController() != null && c.getController().getId() == me.getId()) return true;
+        }
+        return false;
+    }
+
     // ------------------------------------------------------------------ drawing: sidebar
 
     private void drawSidebar(GuiGraphics g, GameView view, PlayerView me, PlayerView opp, int mx, int my, long now) {
         int x = boardW + 6, w = sideW - 12;
         if (multiplayer()) {
             drawTurnBanner(g, view, x, oppPillY, w);
-            drawColumnTags(g, mx, my);
+            drawColumnTags(g, view, mx, my);
         } else {
-            drawPill(g, opp, x, oppPillY, w, mx, my);
+            drawPill(g, view, opp, x, oppPillY, w, mx, my);
         }
         drawPhases(g, view, x, oppPillY + 39, w);
 
@@ -844,26 +1173,61 @@ public class DuelScreen extends Screen {
             g.drawCenteredString(font, "Hover a card", zoomX + zoomW / 2, zoomY + zoomH / 2 - 4, Theme.MUTED);
         }
 
-        // prompt
+        // What to do now: a short headline and one or two plain sentences.
         boolean shake = now - duel.flashTime < 300;
         int sx = shake ? (int) (Math.sin(now / 20.0) * 3) : 0;
-        List<FormattedCharSequence> lines = font.split(Component.literal(cleanPrompt(duel.prompt)), w);
-        int maxLines = Math.max(1, (buttonsY - promptY - 4) / 10);
-        for (int i = 0; i < Math.min(maxLines, lines.size()); i++) {
-            g.drawString(font, lines.get(i), x + sx, promptY + i * 10, Theme.TEXT);
+        String[] guide = guide(view, me);
+        int ty = promptY;
+        if (!guide[0].isEmpty()) {
+            g.drawString(font, Theme.ellipsize(font, guide[0], w), x + sx, ty, Theme.GOLD);
+            ty += 11;
         }
+        List<FormattedCharSequence> lines = font.split(Component.literal(guide[1]), w);
+        int maxLines = Math.max(1, (toolsY - ty - 2) / 9);
+        g.pose().pushPose();
+        for (int i = 0; i < Math.min(maxLines, lines.size()); i++) {
+            g.drawString(font, lines.get(i), x + sx, ty + i * 9, i == maxLines - 1 && lines.size() > maxLines ? Theme.MUTED : 0xFFD8DDD2);
+        }
+        g.pose().popPose();
 
+        drawTools(g, x, w, mx, my);
         int bw = (w - 4) / 2;
         Theme.button(g, font, duel.okLabel + " ␣", x, buttonsY, bw, 20, mx, my, duel.okEnabled, true);
         Theme.button(g, font, duel.cancelLabel, x + bw + 4, buttonsY, bw, 20, mx, my, duel.cancelEnabled, false);
 
-        drawPill(g, me, x, myPillY, w, mx, my);
+        drawPill(g, view, me, x, myPillY, w, mx, my);
         String flag = confirmConcede ? "Concede?" : "⚑";
         int fw = font.width(flag) + 6;
         boolean fh = in(mx, my, x + w - fw - 2, myPillY + 21, fw, 11);
         Theme.rounded(g, x + w - fw - 2, myPillY + 21, fw, 11, fh || confirmConcede ? 0xE0803030 : 0x60000000);
         g.drawString(font, flag, x + w - fw + 1, myPillY + 23, Theme.TEXT, false);
-        drawLog(g, view);
+    }
+
+    /** Small buttons above OK: the log, the zone viewer and the 2D/3D switch. */
+    private void drawTools(GuiGraphics g, int x, int w, int mx, int my) {
+        boolean arenaToggle = ArenaRenderer.has(table);
+        int n = arenaToggle ? 3 : 2;
+        int bw = (w - (n - 1) * 3) / n;
+        toolButton(g, "Log (L)", x, bw, mx, my, showLog, () -> showLog = !showLog);
+        toolButton(g, "Zones (Z)", x + bw + 3, bw, mx, my, viewerOpen, () -> {
+            if (viewerOpen) viewerOpen = false;
+            else openViewer(duel.me(), ZoneType.Graveyard);
+        });
+        if (arenaToggle) toolButton(g, arenaView ? "3D (V)" : "2D (V)", x + 2 * (bw + 3), bw, mx, my, arenaView, this::toggleView);
+    }
+
+    private void toolButton(GuiGraphics g, String label, int x, int w, int mx, int my, boolean on, Runnable action) {
+        boolean hover = in(mx, my, x, toolsY, w, 12);
+        Theme.rounded(g, x, toolsY, w, 12, on ? 0xE0503F1C : hover ? 0xE04A4F49 : 0xC0262B27);
+        g.pose().pushPose();
+        g.pose().translate(x + w / 2f, toolsY + 3, 0);
+        g.pose().scale(0.75f, 0.75f, 1);
+        g.drawCenteredString(font, Theme.ellipsize(font, label, (int) ((w - 2) / 0.75f)), 0, 0, on ? Theme.GOLD : Theme.TEXT);
+        g.pose().popPose();
+        hits.add(new Hit(x, toolsY, w, 12, () -> {
+            action.run();
+            Theme.click();
+        }));
     }
 
     private void drawTurnBanner(GuiGraphics g, GameView view, int x, int y, int w) {
@@ -876,9 +1240,9 @@ public class DuelScreen extends Screen {
         g.drawString(font, Theme.ellipsize(font, who, w - 12), x + 6, y + 18, mine ? Theme.GOLD : Theme.TEXT);
     }
 
-    /** Name, life and counts above each opponent's column; also the drop/click target for that player. */
-    private void drawColumnTags(GuiGraphics g, int mx, int my) {
-        PlayerView turn = duel.getGameView() == null ? null : duel.getGameView().getPlayerTurn();
+    /** Name, life and zone counts above each opponent's column; also the drop/click target for that player. */
+    private void drawColumnTags(GuiGraphics g, GameView view, int mx, int my) {
+        PlayerView turn = view.getPlayerTurn();
         for (Column c : columns) {
             PlayerView p = c.player();
             int x = (int) c.x0(), y = (int) c.pillY(), w = (int) (c.x1() - c.x0());
@@ -890,32 +1254,141 @@ public class DuelScreen extends Screen {
             Theme.rounded(g, x - 1, y - 1, w + 2, 16, edge);
             Theme.rounded(g, x, y, w, 14, out ? 0xE0301818 : 0xE0182019);
             String life = String.valueOf(p.getLife());
-            String counts = " ✋" + p.getZoneSize(ZoneType.Hand) + " ▤" + p.getZoneSize(ZoneType.Library);
             int lifeW = font.width(life) + 4;
             g.drawString(font, life, x + w - lifeW, y + 3, p.getLife() <= 5 ? Theme.RED : 0xFFFFFFFF);
-            String name = Theme.ellipsize(font, p.getName(), w - lifeW - 6 - (w > 120 ? font.width(counts) : 0));
+            String name = Theme.ellipsize(font, p.getName(), Math.max(20, Math.min(font.width(p.getName()), w - lifeW - 8 - (w > 150 ? 70 : 0))));
             g.drawString(font, name, x + 3, y + 3, out ? Theme.MUTED : Theme.TEXT);
-            if (w > 120) g.drawString(font, counts, x + 3 + font.width(name), y + 3, Theme.MUTED);
+            if (w > 150) {
+                int cx = x + 6 + font.width(name);
+                zoneChips(g, view, p, cx, y + 3, x + w - lifeW - 4 - cx, mx, my);
+            }
         }
     }
 
-    /** Card-Forge prompts start with a status line ("Priority: ... Stack: Empty"); keep only the useful part. */
-    private static String cleanPrompt(String prompt) {
-        if (prompt == null) return "";
-        if (prompt.startsWith("Priority:")) {
-            return prompt.contains("Stack: Empty") ? "Play a card, or press OK to move on." : "Respond, or press OK to let it resolve.";
+    /**
+     * Clickable zone counts for one player (hand, library, graveyard, exile, command zone), plus poison and the most
+     * commander damage they've taken. Clicking one opens the zone viewer there.
+     */
+    private void zoneChips(GuiGraphics g, GameView view, PlayerView p, int x, int y, int maxW, int mx, int my) {
+        float s = 0.75f;
+        int cx = x;
+        List<String> labels = new ArrayList<>();
+        List<ZoneType> zones = new ArrayList<>();
+        labels.add("✋" + p.getZoneSize(ZoneType.Hand));
+        zones.add(ZoneType.Hand);
+        labels.add("Lib " + p.getZoneSize(ZoneType.Library));
+        zones.add(ZoneType.Library);
+        labels.add("GY " + p.getZoneSize(ZoneType.Graveyard));
+        zones.add(ZoneType.Graveyard);
+        int ex = p.getZoneSize(ZoneType.Exile), cmd = p.getZoneSize(ZoneType.Command);
+        if (ex > 0) { labels.add("Ex " + ex); zones.add(ZoneType.Exile); }
+        if (cmd > 0) { labels.add("Cmd " + cmd); zones.add(ZoneType.Command); }
+        for (int i = 0; i < labels.size(); i++) {
+            int cw = (int) (font.width(labels.get(i)) * s) + 4;
+            if (cx + cw > x + maxW) return;
+            boolean hover = in(mx, my, cx, y - 1, cw, 9);
+            Theme.rounded(g, cx, y - 1, cw, 9, hover ? 0x80FFFFFF : 0x30FFFFFF);
+            g.pose().pushPose();
+            g.pose().translate(cx + 2, y + 0.5f, 0);
+            g.pose().scale(s, s, 1);
+            g.drawString(font, labels.get(i), 0, 0, Theme.TEXT, false);
+            g.pose().popPose();
+            ZoneType z = zones.get(i);
+            hits.add(new Hit(cx, y - 1, cw, 9, () -> openViewer(p, z)));
+            cx += cw + 2;
         }
-        return prompt.replace("  ", " ").trim();
+        int poison = 0;
+        if (p.getCounters() != null) {
+            for (var t : p.getCounters().elementSet()) if (t.getName().equalsIgnoreCase("poison")) poison = p.getCounters().count(t);
+        }
+        int cmdDamage = commanderDamageTaken(view, p);
+        List<String> extra = new ArrayList<>();
+        if (poison > 0) extra.add("☠" + poison);
+        if (cmdDamage > 0) extra.add("♛" + cmdDamage + "/21");
+        for (String e : extra) {
+            int cw = (int) (font.width(e) * s) + 4;
+            if (cx + cw > x + maxW) return;
+            Theme.rounded(g, cx, y - 1, cw, 9, 0x60801818);
+            g.pose().pushPose();
+            g.pose().translate(cx + 2, y + 0.5f, 0);
+            g.pose().scale(s, s, 1);
+            g.drawString(font, e, 0, 0, 0xFFFFB0A8, false);
+            g.pose().popPose();
+            cx += cw + 2;
+        }
     }
 
-    private void drawPill(GuiGraphics g, PlayerView p, int x, int y, int w, int mx, int my) {
+    /** The most combat damage any single commander has dealt this player (21 is lethal). */
+    private static int commanderDamageTaken(GameView view, PlayerView p) {
+        int most = 0;
+        try {
+            for (PlayerView q : view.getPlayers()) {
+                List<CardView> cmds = q.getCommanders();
+                if (cmds == null) continue;
+                for (CardView c : cmds) most = Math.max(most, p.getCommanderDamage(c));
+            }
+        } catch (RuntimeException notSynced) {
+            // commander info arrives with the first full sync
+        }
+        return most;
+    }
+
+    /**
+     * The sidebar's instructions: {headline, detail}. Card-Forge's own prompts are kept where they say something
+     * specific ("Select target creature"); its generic priority prompt becomes a plain hint for the current step.
+     */
+    private String[] guide(GameView view, PlayerView me) {
+        String raw = duel.prompt == null ? "" : duel.prompt.replace("\n\n", "\n").replaceAll("[ \t]+", " ").trim();
+        boolean myTurn = myTurn(view);
+        PhaseType phase = view.getPhase();
+        String ok = duel.okLabel == null ? "OK" : duel.okLabel;
+        boolean stackEmpty = view.getStack().isEmpty();
+        if (duel.isOver()) return new String[]{"Game over", ""};
+        if (raw.startsWith("Priority") || raw.isEmpty()) {
+            if (!duel.okEnabled && !duel.cancelEnabled) {
+                PlayerView turn = view.getPlayerTurn();
+                return new String[]{"Waiting...", (turn == null ? "The others are" : turn.getName() + " is") + " thinking."};
+            }
+            if (!stackEmpty) {
+                return new String[]{"Respond?", "Cast an instant or use an ability, or press " + ok + " to let the top of the stack resolve."};
+            }
+            if (myTurn && phase == PhaseType.MAIN1) {
+                return new String[]{"Your main phase", "Play a land and cast spells. Drag a creature at an opponent to attack. " + ok + " moves on."};
+            }
+            if (myTurn && phase == PhaseType.MAIN2) {
+                return new String[]{"Your second main phase", "Cast more spells, or press " + ok + " to end your turn."};
+            }
+            if (myTurn) return new String[]{"Your turn", "Press " + ok + " to continue."};
+            PlayerView turn = view.getPlayerTurn();
+            return new String[]{(turn == null ? "Their" : turn.getName() + "'s") + " turn", "You may cast instants now. Press " + ok + " to continue."};
+        }
+        if (phase == PhaseType.COMBAT_DECLARE_ATTACKERS && myTurn) {
+            return new String[]{"Declare attackers", "Drag creatures at an opponent (or click them). Right-click one to take it back. Press " + ok + " to attack."};
+        }
+        if (phase == PhaseType.COMBAT_DECLARE_BLOCKERS && !myTurn && defending(view, me)) {
+            return new String[]{"Declare blockers", "Drag your creature onto an attacker to block it (or click the attacker, then your creature). Right-click undoes. Press " + ok + " when done."};
+        }
+        if (startingPlayerPrompt()) return new String[]{"Who goes first?", "Pick a player in the middle of the board."};
+        if (raw.startsWith("Pay Mana Cost")) {
+            return new String[]{"Pay the cost", raw.replace("Pay Mana Cost:", "Cost:") + "\nClick lands to tap them" + (duel.okEnabled ? ", or press " + ok + " to pay automatically." : ".")};
+        }
+        if (duel.isSelecting() && hasTray()) return new String[]{"Choose", raw + "\nThe cards you can pick are in the middle of the board."};
+        if (duel.isSelecting()) return new String[]{"Choose", raw + "\nGlowing cards can be picked."};
+        return new String[]{"", raw};
+    }
+
+    private boolean startingPlayerPrompt() {
+        String p = duel.prompt;
+        return p != null && p.contains("start this game");
+    }
+
+    private void drawPill(GuiGraphics g, GameView view, PlayerView p, int x, int y, int w, int mx, int my) {
         boolean target = duel.isHighlighted(p);
         boolean hover = mx >= x && mx < x + w && my >= y && my < y + 34;
         int edge = target ? Theme.SELECT : hover ? 0xFFB0B5A8 : Theme.PANEL_EDGE;
         Theme.rounded(g, x - 1, y - 1, w + 2, 36, edge);
         Theme.rounded(g, x, y, w, 34, 0xF0182019);
-        boolean turn = duel.getGameView() != null && duel.getGameView().getPlayerTurn() != null
-                && duel.getGameView().getPlayerTurn().getId() == p.getId();
+        boolean turn = view.getPlayerTurn() != null && view.getPlayerTurn().getId() == p.getId();
         Theme.disc(g, x + 13, y + 13, 9, turn ? Theme.GOLD : 0xFF3A403B);
         String initial = p.getName().isEmpty() ? "?" : p.getName().substring(0, 1).toUpperCase();
         g.drawCenteredString(font, initial, x + 13, y + 9, turn ? 0xFF2A2010 : Theme.TEXT);
@@ -926,13 +1399,7 @@ public class DuelScreen extends Screen {
         g.pose().scale(1.5f, 1.5f, 1);
         g.drawString(font, life, 0, 0, p.getLife() <= 5 ? Theme.RED : 0xFFFFFFFF);
         g.pose().popPose();
-        String sub = "Hand " + p.getZoneSize(ZoneType.Hand) + "  Lib " + p.getZoneSize(ZoneType.Library);
-        if (p.getCounters() != null) {
-            int poison = 0;
-            for (var t : p.getCounters().elementSet()) if (t.getName().equalsIgnoreCase("poison")) poison = p.getCounters().count(t);
-            if (poison > 0) sub += "  ☠" + poison;
-        }
-        g.drawString(font, Theme.ellipsize(font, sub, w - 30), x + 26, y + 14, Theme.MUTED);
+        zoneChips(g, view, p, x + 26, y + 15, w - 30, mx, my);
         // floating mana, clickable to spend
         int ox = x + 26;
         for (int i = 0; i < 5; i++) {
@@ -973,19 +1440,168 @@ public class DuelScreen extends Screen {
         }
     }
 
+    /** The game log, newest first, in a panel beside the sidebar (toggled with the Log button or L). */
     private void drawLog(GuiGraphics g, GameView view) {
+        List<GameLogEntry> log;
         try {
-            List<GameLogEntry> log = view.getGameLog().getLogEntries(null);
-            int shown = 0;
-            for (int i = 0; i < log.size() && shown < 3; i++, shown++) {
-                String msg = log.get(i).message();
-                int alpha = 200 - shown * 60;
-                g.drawString(font, Theme.ellipsize(font, msg, boardW - rowX0 - 10), rowX0, (int) (midY - 30 - shown * 10),
-                        (alpha << 24) | 0xD8E0D0, true);
-            }
-        } catch (RuntimeException ignored) {
-            // log being appended to by the game thread
+            log = new ArrayList<>(view.getGameLog().getLogEntries(null));
+        } catch (RuntimeException appending) {
+            return;
         }
+        int pw = (int) Math.min(boardW * 0.55f, 280), lineW = pw - 12;
+        List<FormattedCharSequence> lines = new ArrayList<>();
+        List<Integer> colors = new ArrayList<>();
+        int maxLines = Math.max(4, (int) ((toolsY - 20) / 9f) - 2);
+        for (int i = 0; i < log.size() && lines.size() < maxLines; i++) {
+            List<FormattedCharSequence> l = font.split(Component.literal(log.get(i).message()), lineW);
+            for (int j = 0; j < l.size() && lines.size() < maxLines; j++) {
+                lines.add(l.get(j));
+                colors.add(i == 0 ? Theme.TEXT : 0xFFB8C0B4);
+            }
+        }
+        int ph = 18 + Math.max(1, lines.size()) * 9 + 4;
+        int px = boardW - pw - 4, py = Math.max(4, toolsY + 12 - ph);
+        g.pose().pushPose();
+        g.pose().translate(0, 0, 250);
+        Theme.panel(g, px, py, pw, ph);
+        g.drawString(font, "Game log", px + 6, py + 5, Theme.GOLD, false);
+        if (lines.isEmpty()) g.drawString(font, "Nothing yet.", px + 6, py + 18, Theme.MUTED, false);
+        for (int i = 0; i < lines.size(); i++) g.drawString(font, lines.get(i), px + 6, py + 18 + i * 9, colors.get(i), false);
+        g.pose().popPose();
+    }
+
+    // ------------------------------------------------------------------ zone viewer
+
+    private void openViewer(PlayerView p, ZoneType zone) {
+        if (p == null) return;
+        viewerOpen = true;
+        viewerFor = p;
+        viewerZone = zone;
+        viewerScroll = 0;
+        Theme.click();
+    }
+
+    private int[] viewerPanel() {
+        return new int[]{8, 8, boardW - 16, height - 16};
+    }
+
+    private List<CardView> viewerCards(PlayerView p, ZoneType zone) {
+        List<CardView> list = cards(p.getCards(zone));
+        if (zone == ZoneType.Graveyard || zone == ZoneType.Exile) java.util.Collections.reverse(list); // newest first
+        if (zone == ZoneType.Library || zone == ZoneType.Hand) list.removeIf(c -> !duel.mayView(c));
+        return list;
+    }
+
+    /**
+     * Everybody's graveyard, exile, command zone, library and hand, one player and zone at a time. Click a card to
+     * use it (cast your commander, flashback, pick it as a target).
+     */
+    private void drawViewer(GuiGraphics g, GameView view, PlayerView me, int mx, int my, long now) {
+        viewerHits.clear();
+        PlayerView p = null;
+        for (PlayerView q : view.getPlayers()) if (viewerFor != null && q.getId() == viewerFor.getId()) p = q;
+        if (p == null) {
+            viewerOpen = false;
+            return;
+        }
+        g.pose().pushPose();
+        g.pose().translate(0, 0, 300);
+        g.fill(0, 0, boardW, height, 0x99000000);
+        int[] r = viewerPanel();
+        int px = r[0], py = r[1], pw = r[2], ph = r[3];
+        Theme.panel(g, px, py, pw, ph);
+
+        // player tabs (me first, then the others in turn order)
+        List<PlayerView> players = new ArrayList<>();
+        players.add(me);
+        for (Column c : columns) players.add(c.player());
+        int tx = px + 6;
+        for (PlayerView q : players) {
+            String name = q.getId() == me.getId() ? "You" : q.getName();
+            int tw = Math.min(110, font.width(name) + 12);
+            boolean sel = q.getId() == p.getId();
+            Theme.button(g, font, name, tx, py + 6, tw, 14, mx, my, true, sel);
+            PlayerView target = q;
+            viewerHits.add(new Hit(tx, py + 6, tw, 14, () -> openViewer(target, viewerZone)));
+            tx += tw + 4;
+        }
+        Theme.button(g, font, "✕", px + pw - 20, py + 6, 14, 14, mx, my, true, false);
+        viewerHits.add(new Hit(px + pw - 20, py + 6, 14, 14, () -> viewerOpen = false));
+
+        // zone tabs
+        ZoneType[] zones = {ZoneType.Graveyard, ZoneType.Exile, ZoneType.Command, ZoneType.Library, ZoneType.Hand};
+        tx = px + 6;
+        for (ZoneType z : zones) {
+            String label = zoneName(z) + " " + p.getZoneSize(z);
+            int tw = font.width(label) + 10;
+            Theme.button(g, font, label, tx, py + 24, tw, 13, mx, my, true, z == viewerZone);
+            PlayerView target = p;
+            viewerHits.add(new Hit(tx, py + 24, tw, 13, () -> openViewer(target, z)));
+            tx += tw + 3;
+        }
+
+        List<CardView> list = viewerCards(p, viewerZone);
+        int top = py + 44, avail = ph - 44 - 14;
+        float ch = Math.min(cardH * 1.4f, avail / 2.1f), cw = ch * 63f / 88f;
+        int cols = Math.max(1, (int) ((pw - 12) / (cw + 6)));
+        int rows = Math.max(1, (int) (avail / (ch + 6)));
+        int totalRows = (list.size() + cols - 1) / cols;
+        viewerScroll = Math.max(0, Math.min(viewerScroll, Math.max(0, totalRows - rows)));
+        if (list.isEmpty()) {
+            int hidden = p.getZoneSize(viewerZone);
+            String msg = hidden > 0 ? hidden + " card" + (hidden == 1 ? "" : "s") + ", face down." : "Empty.";
+            g.drawCenteredString(font, msg, px + pw / 2, top + avail / 2 - 4, Theme.MUTED);
+        }
+        for (int i = viewerScroll * cols; i < list.size() && i < (viewerScroll + rows) * cols; i++) {
+            int slot = i - viewerScroll * cols;
+            float cx = px + 6 + (slot % cols) * (cw + 6), cy = top + (slot / cols) * (ch + 6);
+            CardView c = list.get(i);
+            boolean hover = mx >= cx && mx < cx + cw && my >= cy && my < cy + ch;
+            if (duel.mayView(c)) drawCardFace(g, c, cx, cy, cw, ch, 1f);
+            else blitScaled(g, Theme.CARD_BACK, cx, cy, cw, ch, 126, 176, 1f);
+            int border = duel.isSelectable(c) ? (((int) (150 + 105 * Math.sin(now / 160.0))) << 24) | (Theme.SELECT & 0xFFFFFF)
+                    : hover ? 0xD0FFFFFF : 0;
+            if (border != 0) {
+                g.pose().pushPose();
+                g.pose().translate(cx, cy, 0);
+                outline(g, cw, ch, border);
+                g.pose().popPose();
+            }
+            if (hover) {
+                viewerHover = c;
+                zoomCard = c;
+            }
+            viewerHits.add(new Hit(cx, cy, cw, ch, () -> {
+                duel.clickCard(c, 1);
+                viewerOpen = false;
+                Theme.click();
+            }));
+        }
+        String foot = totalRows > rows ? "Scroll for more · " : "";
+        g.drawString(font, foot + "Click a card to use or pick it · Esc closes", px + 6, py + ph - 11, 0x80A9B5A8, false);
+        g.pose().popPose();
+    }
+
+    /** "Who goes first?" in multiplayer games: one button per player. */
+    private void drawStarterPicker(GuiGraphics g, GameView view, int mx, int my) {
+        List<PlayerView> players = new ArrayList<>((java.util.Collection<PlayerView>) view.getPlayers());
+        int bw = 120, bh = 18, pw = bw + 20, ph = 26 + players.size() * (bh + 4) + 4;
+        int px = (boardW - pw) / 2, py = (height - ph) / 2;
+        g.pose().pushPose();
+        g.pose().translate(0, 0, 300);
+        Theme.panel(g, px, py, pw, ph);
+        g.drawCenteredString(font, "Who goes first?", px + pw / 2, py + 8, Theme.GOLD);
+        for (int i = 0; i < players.size(); i++) {
+            PlayerView p = players.get(i);
+            String name = duel.isLocalPlayer(p) ? "Me (" + p.getName() + ")" : p.getName();
+            int by = py + 24 + i * (bh + 4);
+            Theme.button(g, font, name, px + 10, by, bw, bh, mx, my, true, duel.isLocalPlayer(p));
+            hits.add(new Hit(px + 10, by, bw, bh, () -> {
+                duel.clickPlayer(p);
+                Theme.click();
+            }));
+        }
+        g.pose().popPose();
     }
 
     // ------------------------------------------------------------------ choice overlay
@@ -994,32 +1610,63 @@ public class DuelScreen extends Screen {
         if (req != shownRequest) {
             shownRequest = req;
             picked.clear();
+            distValues.clear();
+            if (req != null && req.kind == ChoiceRequest.Kind.DISTRIBUTE) distValues.addAll(req.initial);
             optionScroll = 0;
             numberValue = req == null ? 0 : req.max;
         }
     }
 
+    private static final int DIST_ROW = 24;
+
     private int[] choicePanel(ChoiceRequest req) {
         int pw = Math.min(boardW - 20, 440);
         int ph;
         if (req.kind == ChoiceRequest.Kind.NUMBER) ph = 110;
-        else if (req.hasCards()) ph = (int) (cardH * 1.6f) + 90;
-        else ph = Math.min(height - 40, 70 + Math.min(8, req.labels.size()) * 22 + 30);
+        else if (req.kind == ChoiceRequest.Kind.DISTRIBUTE) ph = Math.min(height - 30, 84 + Math.min(8, req.labels.size()) * DIST_ROW + 34);
+        else if (req.hasCards()) ph = (int) (cardH * 1.6f) + 100;
+        else ph = Math.min(height - 40, 80 + Math.min(8, req.labels.size()) * 22 + 30);
         return new int[]{(boardW - pw) / 2, (height - ph) / 2, pw, ph};
     }
 
+    /** One plain line saying how to answer this kind of question. */
+    private static String howTo(ChoiceRequest req) {
+        int n = req.labels.size();
+        return switch (req.kind) {
+            case ORDER -> req.min == n && req.max == n ? "Click them in order: number 1 comes first."
+                    : "Click the ones you want, in order (" + req.min + "–" + req.max + "). Click again to undo.";
+            case DISTRIBUTE -> "Use − and + (or scroll over a row) until nothing is left.";
+            case NUMBER -> "";
+            case PICK -> req.max == 0 ? "" : req.min == 1 && req.max == 1 ? "Click one."
+                    : req.min == req.max ? "Pick " + req.min + "."
+                    : "Pick " + (req.min == 0 ? "up to " + req.max : req.min + " to " + req.max) + ".";
+        };
+    }
+
+    /** Message lines (Card-Forge's question plus how to answer it), wrapped to the panel. */
+    private List<FormattedCharSequence> choiceLines(ChoiceRequest req, int pw) {
+        List<FormattedCharSequence> msg = new ArrayList<>(font.split(Component.literal(req.message), pw - 20));
+        while (msg.size() > 3) msg.remove(msg.size() - 1);
+        String how = howTo(req);
+        if (!how.isEmpty()) msg.addAll(font.split(Component.literal(how), pw - 20));
+        return msg;
+    }
+
     private void drawChoice(GuiGraphics g, ChoiceRequest req, int mx, int my, long now) {
+        g.pose().pushPose();
+        g.pose().translate(0, 0, 300);
         g.fill(0, 0, boardW, height, 0x88000000);
         int[] p = choicePanel(req);
         int px = p[0], py = p[1], pw = p[2], ph = p[3];
         Theme.panel(g, px, py, pw, ph);
         String title = req.title.isEmpty() ? (req.subject != null ? req.subject.getName() : "Decision") : req.title;
         g.drawCenteredString(font, Theme.ellipsize(font, title, pw - 20), px + pw / 2, py + 8, Theme.GOLD);
-        List<FormattedCharSequence> msg = font.split(Component.literal(req.message), pw - 20);
-        for (int i = 0; i < Math.min(3, msg.size()); i++) {
-            g.drawCenteredString(font, msg.get(i), px + pw / 2, py + 22 + i * 10, Theme.TEXT);
+        List<FormattedCharSequence> msg = choiceLines(req, pw);
+        int howFrom = Math.min(3, font.split(Component.literal(req.message), pw - 20).size());
+        for (int i = 0; i < msg.size(); i++) {
+            g.drawCenteredString(font, msg.get(i), px + pw / 2, py + 22 + i * 10, i >= howFrom ? Theme.MUTED : Theme.TEXT);
         }
-        int contentY = py + 26 + Math.min(3, msg.size()) * 10;
+        int contentY = py + 26 + msg.size() * 10;
 
         if (req.kind == ChoiceRequest.Kind.NUMBER) {
             String v = String.valueOf(numberValue);
@@ -1031,6 +1678,8 @@ public class DuelScreen extends Screen {
             Theme.button(g, font, "−", px + pw / 2 - 60, contentY + 6, 20, 18, mx, my, numberValue > req.min, false);
             Theme.button(g, font, "+", px + pw / 2 + 40, contentY + 6, 20, 18, mx, my, numberValue < req.max, false);
             g.drawCenteredString(font, req.min + " – " + req.max + " (scroll to change)", px + pw / 2, contentY + 30, Theme.MUTED);
+        } else if (req.kind == ChoiceRequest.Kind.DISTRIBUTE) {
+            drawDistribute(g, req, px, pw, contentY, mx, my);
         } else if (req.hasCards()) {
             float ch = cardH * 1.5f, cw = ch * 63f / 88f;
             int n = req.labels.size();
@@ -1093,10 +1742,86 @@ public class DuelScreen extends Screen {
 
         if (needsConfirm(req)) {
             boolean ok = confirmAllowed(req);
-            String label = req.max == 0 ? "Done" : picked.isEmpty() && req.min == 0 && req.kind != ChoiceRequest.Kind.NUMBER ? "None" : "Confirm";
+            String label = req.max == 0 && req.kind != ChoiceRequest.Kind.DISTRIBUTE ? "Done"
+                    : picked.isEmpty() && req.min == 0 && req.kind != ChoiceRequest.Kind.NUMBER && req.kind != ChoiceRequest.Kind.DISTRIBUTE ? "None"
+                    : "Confirm";
             Theme.button(g, font, label, px + pw / 2 - 50, py + ph - 26, 100, 20, mx, my, ok, true);
         }
         g.drawString(font, "Hold Tab to see the board", px + 6, py + ph - 10, 0x80A9B5A8);
+        g.pose().popPose();
+    }
+
+    /** Rows of "name  [−] amount [+]" for splitting damage or counters. */
+    private void drawDistribute(GuiGraphics g, ChoiceRequest req, int px, int pw, int contentY, int mx, int my) {
+        int n = req.labels.size();
+        int visible = Math.min(8, n);
+        for (int i = 0; i < visible; i++) {
+            int idx = i + optionScroll;
+            if (idx >= n) break;
+            int ry = contentY + 4 + i * DIST_ROW;
+            boolean hover = in(mx, my, px + 12, ry, pw - 24, DIST_ROW - 4);
+            Theme.rounded(g, px + 12, ry, pw - 24, DIST_ROW - 4, hover ? 0x40FFFFFF : 0x24FFFFFF);
+            CardView c = req.cards.get(idx);
+            int textX = px + 18;
+            if (c != null && duel.mayView(c)) {
+                float th = DIST_ROW - 6, tw = th * 63f / 88f;
+                drawCardFace(g, c, px + 15, ry + 1, tw, th, 1f);
+                textX += (int) tw + 4;
+                if (hover) {
+                    zoomCard = c;
+                    choiceHover = c;
+                }
+            }
+            int value = idx < distValues.size() ? distValues.get(idx) : 0;
+            int ctrlX = px + pw - 24 - 74;
+            g.drawString(font, Theme.ellipsize(font, req.labels.get(idx), ctrlX - textX - 4), textX, ry + 2, Theme.TEXT, false);
+            if (idx < req.notes.size()) {
+                g.pose().pushPose();
+                g.pose().translate(textX, ry + 12, 0);
+                g.pose().scale(0.75f, 0.75f, 1);
+                g.drawString(font, req.notes.get(idx), 0, 0, Theme.MUTED, false);
+                g.pose().popPose();
+            }
+            int min = idx < req.minEach.size() ? req.minEach.get(idx) : 0;
+            Theme.button(g, font, "−", ctrlX, ry + 2, 16, 15, mx, my, value > min, false);
+            String v = String.valueOf(value);
+            g.drawCenteredString(font, v, ctrlX + 37, ry + 5, value > 0 ? Theme.GOLD : Theme.MUTED);
+            Theme.button(g, font, "+", ctrlX + 58, ry + 2, 16, 15, mx, my, distLeft(req) > 0, false);
+        }
+        if (n > visible) g.drawCenteredString(font, "scroll for more", px + pw / 2, contentY + 4 + visible * DIST_ROW, Theme.MUTED);
+        String problem = req.problem(distValues);
+        int footY = contentY + 6 + visible * DIST_ROW + (n > visible ? 10 : 0);
+        g.drawCenteredString(font, problem == null ? "Ready." : problem, px + pw / 2, footY, problem == null ? Theme.GREEN : 0xFFFFB0A8);
+    }
+
+    private int distLeft(ChoiceRequest req) {
+        int sum = 0;
+        for (int v : distValues) sum += v;
+        return req.total - sum;
+    }
+
+    /** Index of the distribute row under the mouse, or -1. */
+    private int distRowAt(ChoiceRequest req, double mx, double my) {
+        int[] p = choicePanel(req);
+        int contentY = p[1] + 26 + choiceLines(req, p[2]).size() * 10;
+        for (int i = 0; i < Math.min(8, req.labels.size()); i++) {
+            if (in(mx, my, p[0] + 12, contentY + 4 + i * DIST_ROW, p[2] - 24, DIST_ROW - 4)) {
+                int idx = i + optionScroll;
+                return idx < req.labels.size() ? idx : -1;
+            }
+        }
+        return -1;
+    }
+
+    private void nudge(ChoiceRequest req, int idx, int delta) {
+        if (idx < 0 || idx >= distValues.size()) return;
+        int min = idx < req.minEach.size() ? req.minEach.get(idx) : 0;
+        int v = distValues.get(idx);
+        int next = delta > 0 ? v + Math.min(delta, distLeft(req)) : Math.max(min, v + delta);
+        if (next != v) {
+            distValues.set(idx, next);
+            Theme.click();
+        }
     }
 
     /** Single picks answer on click; everything else needs a Confirm. */
@@ -1106,12 +1831,15 @@ public class DuelScreen extends Screen {
 
     private boolean confirmAllowed(ChoiceRequest req) {
         if (req.kind == ChoiceRequest.Kind.NUMBER) return true;
+        if (req.kind == ChoiceRequest.Kind.DISTRIBUTE) return req.problem(distValues) == null;
         return picked.size() >= req.min && picked.size() <= req.max;
     }
 
     private void answer(ChoiceRequest req) {
         if (req.kind == ChoiceRequest.Kind.NUMBER) {
             req.answer.complete(List.of(numberValue));
+        } else if (req.kind == ChoiceRequest.Kind.DISTRIBUTE) {
+            req.answer.complete(new ArrayList<>(distValues));
         } else {
             req.answer.complete(new ArrayList<>(picked));
         }
@@ -1121,8 +1849,7 @@ public class DuelScreen extends Screen {
     private boolean clickChoice(ChoiceRequest req, double mx, double my) {
         int[] p = choicePanel(req);
         int px = p[0], py = p[1], pw = p[2], ph = p[3];
-        List<FormattedCharSequence> msg = font.split(Component.literal(req.message), pw - 20);
-        int contentY = py + 26 + Math.min(3, msg.size()) * 10;
+        int contentY = py + 26 + choiceLines(req, pw).size() * 10;
 
         if (needsConfirm(req) && in(mx, my, px + pw / 2 - 50, py + ph - 26, 100, 20)) {
             if (confirmAllowed(req)) answer(req);
@@ -1131,6 +1858,15 @@ public class DuelScreen extends Screen {
         if (req.kind == ChoiceRequest.Kind.NUMBER) {
             if (in(mx, my, px + pw / 2 - 60, contentY + 6, 20, 18)) numberValue = Math.max(req.min, numberValue - 1);
             if (in(mx, my, px + pw / 2 + 40, contentY + 6, 20, 18)) numberValue = Math.min(req.max, numberValue + 1);
+            return true;
+        }
+        if (req.kind == ChoiceRequest.Kind.DISTRIBUTE) {
+            int idx = distRowAt(req, mx, my);
+            if (idx < 0) return true;
+            int ry = contentY + 4 + (idx - optionScroll) * DIST_ROW;
+            int ctrlX = px + pw - 24 - 74;
+            if (in(mx, my, ctrlX, ry + 2, 16, 15)) nudge(req, idx, -1);
+            else if (in(mx, my, ctrlX + 58, ry + 2, 16, 15)) nudge(req, idx, 1);
             return true;
         }
         int hit = -1;
@@ -1172,23 +1908,68 @@ public class DuelScreen extends Screen {
 
     // ------------------------------------------------------------------ game over
 
+    private boolean gauntlet() {
+        return ClientTables.isGauntlet(table);
+    }
+
     private int[] gameOverPanel() {
-        return new int[]{boardW / 2 - 90, height / 2 - 45, 180, 90};
+        return gauntlet() ? new int[]{boardW / 2 - 100, height / 2 - 40, 200, 80} : new int[]{boardW / 2 - 90, height / 2 - 45, 180, 90};
+    }
+
+    /** "Victory!", "Defeat" or "Draw", from my side of the table (a teammate's win is mine too). */
+    private static String outcome(GameView view, PlayerView me) {
+        String winner = view.getWinningPlayerName();
+        if (winner != null && winner.equals(me.getName()) && !me.getHasLost()) return "Victory!";
+        if (me.getHasLost()) return "Defeat";
+        if (winner == null || winner.isEmpty()) return "Draw";
+        for (PlayerView o : me.getOpponents()) if (o.getName().equals(winner)) return "Defeat";
+        return "Victory!";
     }
 
     private void drawGameOver(GuiGraphics g, GameView view, PlayerView me, int mx, int my) {
+        g.pose().pushPose();
+        g.pose().translate(0, 0, 350);
         g.fill(0, 0, boardW, height, 0x99000000);
         int[] p = gameOverPanel();
         Theme.panel(g, p[0], p[1], p[2], p[3]);
-        String winner = view.getWinningPlayerName();
-        String title = winner == null || winner.isEmpty() ? "Draw" : winner.equals(me.getName()) ? "Victory!" : "Defeat";
+        String title = outcome(view, me);
+        boolean won = title.equals("Victory!");
         g.pose().pushPose();
         g.pose().translate(p[0] + p[2] / 2f, p[1] + 10, 0);
         g.pose().scale(2, 2, 1);
-        g.drawCenteredString(font, title, 0, 0, title.equals("Victory!") ? Theme.GOLD : Theme.TEXT);
+        g.drawCenteredString(font, title, 0, 0, won ? Theme.GOLD : Theme.TEXT);
         g.pose().popPose();
-        Theme.button(g, font, "Back to the table", p[0] + 20, p[1] + 38, p[2] - 40, 18, mx, my, true, true);
-        Theme.button(g, font, "Leave table", p[0] + 20, p[1] + 62, p[2] - 40, 18, mx, my, true, false);
+        if (gauntlet()) {
+            // A gauntlet fight has no table to go back to: take the reward (or the loss) and walk away.
+            String sub = won ? "Your opponents fall. Their loot is yours." : title.equals("Draw") ? "Nobody wins this time." : "Better luck next time.";
+            g.drawCenteredString(font, Theme.ellipsize(font, sub, p[2] - 12), p[0] + p[2] / 2, p[1] + 32, Theme.MUTED);
+            Theme.button(g, font, won ? "Collect reward" : "Continue", p[0] + 30, p[1] + 50, p[2] - 60, 20, mx, my, true, true);
+        } else {
+            Theme.button(g, font, "Back to the table", p[0] + 20, p[1] + 38, p[2] - 40, 18, mx, my, true, true);
+            Theme.button(g, font, "Leave table", p[0] + 20, p[1] + 62, p[2] - 40, 18, mx, my, true, false);
+        }
+        g.pose().popPose();
+    }
+
+    private boolean clickGameOver(double mx, double my) {
+        int[] p = gameOverPanel();
+        if (gauntlet()) {
+            if (in(mx, my, p[0] + 30, p[1] + 50, p[2] - 60, 20)) {
+                duel.leave();
+                ClientTables.forget(table);
+                minecraft.setScreen(null);
+            }
+            return true;
+        }
+        if (in(mx, my, p[0] + 20, p[1] + 38, p[2] - 40, 18)) {
+            duel.leave();
+            backToTable();
+        } else if (in(mx, my, p[0] + 20, p[1] + 62, p[2] - 40, 18)) {
+            duel.leave();
+            ClientTables.forget(table);
+            minecraft.setScreen(null);
+        }
+        return true;
     }
 
     // ------------------------------------------------------------------ input
@@ -1200,7 +1981,12 @@ public class DuelScreen extends Screen {
             Placed p = placed.get(i);
             Anim a = anims.get(p.card.getId());
             if (a == null || !p.contains(mx, my, a)) continue;
-            int rank = p.zone.ordinal() == Zone.HAND.ordinal() ? 2000 + i : p.zone == Zone.STACK ? 1000 + i : i;
+            int rank = switch (p.zone) {
+                case TRAY -> 3000 + i;
+                case HAND, COMMAND -> 2000 + i;
+                case STACK -> 1000 + i;
+                default -> i;
+            };
             if (rank > bestRank) {
                 best = p;
                 bestRank = rank;
@@ -1252,21 +2038,27 @@ public class DuelScreen extends Screen {
         if (req != null && !peeking) {
             if (in(mx, my, 0, 0, boardW, height)) return clickChoice(req, mx, my);
         }
-        if (duel.isOver() && req == null) {
-            int[] p = gameOverPanel();
-            if (in(mx, my, p[0] + 20, p[1] + 38, p[2] - 40, 18)) {
-                duel.leave();
-                backToTable();
-            } else if (in(mx, my, p[0] + 20, p[1] + 62, p[2] - 40, 18)) {
-                duel.leave();
-                ClientTables.forget(table);
-                minecraft.setScreen(null);
+        if (duel.isOver() && req == null && in(mx, my, 0, 0, boardW, height)) {
+            return clickGameOver(mx, my);
+        }
+        if (viewerOpen && in(mx, my, 0, 0, boardW, height)) {
+            for (int i = viewerHits.size() - 1; i >= 0; i--) {
+                if (viewerHits.get(i).contains(mx, my)) {
+                    viewerHits.get(i).action().run();
+                    return true;
+                }
             }
+            int[] r = viewerPanel();
+            if (!in(mx, my, r[0], r[1], r[2], r[3])) viewerOpen = false;
             return true;
         }
-        if (ArenaRenderer.has(table) && in(mx, my, boardW - 92, 2, 88, 13)) {
-            toggleView();
-            return true;
+        if (button == 0) {
+            for (int i = hits.size() - 1; i >= 0; i--) {
+                if (hits.get(i).contains(mx, my)) {
+                    hits.get(i).action().run();
+                    return true;
+                }
+            }
         }
         int x = boardW + 6, w = sideW - 12, bw = (w - 4) / 2;
         if (in(mx, my, x, buttonsY, bw, 20)) {
@@ -1287,6 +2079,10 @@ public class DuelScreen extends Screen {
         confirmConcede = false;
         PlayerView pill = pillAt(mx, my);
         if (pill != null) {
+            if (button == 1) {
+                openViewer(pill, ZoneType.Graveyard);
+                return true;
+            }
             if (pill == duel.me() && clickMana(mx, my)) return true;
             duel.clickPlayer(pill);
             return true;
@@ -1294,6 +2090,7 @@ public class DuelScreen extends Screen {
         Placed p = topCardAt(mx, my);
         if (p != null) {
             if (button == 1) {
+                if (queuedAttack.remove(p.card.getId())) return true;
                 duel.clickCard(p.card, 3);
                 return true;
             }
@@ -1333,7 +2130,7 @@ public class DuelScreen extends Screen {
     }
 
     private boolean canDrag(Placed p) {
-        return p.mine && (p.zone == Zone.HAND || p.zone == Zone.BATTLEFIELD);
+        return p.mine && (p.zone == Zone.HAND || p.zone == Zone.BATTLEFIELD || p.zone == Zone.COMMAND);
     }
 
     @Override
@@ -1366,14 +2163,15 @@ public class DuelScreen extends Screen {
         PlayerView onPlayer = pillAt(mx, my);
         boolean oppSide = my < midY && mx < boardW;
         boolean handArea = my >= handTop - 4 && mx < boardW;
-        boolean myTurn = view.getPlayerTurn() != null && view.getPlayerTurn().getId() == me.getId();
+        boolean myTurn = myTurn(view);
         PhaseType phase = view.getPhase();
 
-        if (src.zone == Zone.HAND) {
-            if (handArea && onPlayer == null && (onCard == null || onCard.zone == Zone.HAND)) {
+        if (src.zone == Zone.HAND || src.zone == Zone.COMMAND) {
+            if (src.zone == Zone.HAND && handArea && onPlayer == null && (onCard == null || onCard.zone == Zone.HAND)) {
                 reorder(src, me, mx);
                 return;
             }
+            if (src.zone == Zone.COMMAND && handArea && onPlayer == null && onCard == null) return;
             duel.clickCard(src.card, 1);
             aimAt(onCard != null && onCard.zone != Zone.HAND ? onCard.card : onPlayer);
             Theme.play(SoundEvents.BOOK_PUT, 1.2f, 0.7f);
@@ -1382,9 +2180,9 @@ public class DuelScreen extends Screen {
 
         // A creature or other permanent of mine on the battlefield.
         CombatView combat = view.getCombat();
+        boolean towardOpponent = oppSide || (onPlayer != null && onPlayer.getId() != me.getId());
         if (phase == PhaseType.COMBAT_DECLARE_ATTACKERS && myTurn) {
             boolean attacking = combat != null && combat.isAttacking(src.card);
-            boolean towardOpponent = oppSide || (onPlayer != null && onPlayer.getId() != me.getId());
             if (towardOpponent && multiplayer()) {
                 // Pick who to attack first (Card-Forge's attack input switches its current defender).
                 PlayerView defender = onPlayer != null && onPlayer.getId() != me.getId() ? onPlayer : opponentAt(mx);
@@ -1396,11 +2194,35 @@ public class DuelScreen extends Screen {
             return;
         }
         if (phase == PhaseType.COMBAT_DECLARE_BLOCKERS && !myTurn) {
-            if (onCard != null && combat != null && combat.isAttacking(onCard.card)) {
-                duel.block(onCard.card, src.card);
+            Placed attacker = combat == null ? null : attackerAt(combat, mx, my);
+            if (attacker != null) {
+                duel.block(attacker.card, src.card);
             } else if (combat != null && combat.isBlocking(src.card)) {
                 duel.clickCard(src.card, 3);
             }
+            return;
+        }
+        // Dragging a creature at an opponent before combat: go to combat and attack with it. This never uses the
+        // creature's own abilities (click the creature for those).
+        boolean beforeCombat = phase == PhaseType.UPKEEP || phase == PhaseType.DRAW || phase == PhaseType.MAIN1
+                || phase == PhaseType.COMBAT_BEGIN;
+        CardStateView s = src.card.getCurrentState();
+        if (myTurn && beforeCombat && towardOpponent && s != null && s.isCreature() && onCard == null) {
+            if (src.card.isTapped() || src.card.isSick()) {
+                duel.flashTime = System.currentTimeMillis();
+                return;
+            }
+            if (!queuedAttack.add(src.card.getId())) queuedAttack.remove(src.card.getId());
+            queuedTurn = view.getTurn();
+            if (multiplayer()) {
+                PlayerView defender = onPlayer != null && onPlayer.getId() != me.getId() ? onPlayer : opponentAt(mx);
+                if (defender != null) queuedDefender = defender;
+            }
+            if (!queuedAttack.isEmpty() && view.getStack().isEmpty() && duel.okEnabled
+                    && duel.prompt != null && duel.prompt.startsWith("Priority")) {
+                duel.ok();
+            }
+            Theme.play(SoundEvents.ARMOR_EQUIP_IRON, 1.2f, 0.6f);
             return;
         }
         if (onCard != null || onPlayer != null) {
@@ -1444,12 +2266,18 @@ public class DuelScreen extends Screen {
     @Override
     public boolean mouseScrolled(double mx, double my, double delta) {
         ChoiceRequest req = duel.currentRequest();
-        if (req != null) {
+        if (req != null && !peeking) {
             if (req.kind == ChoiceRequest.Kind.NUMBER) {
                 numberValue = Math.max(req.min, Math.min(req.max, numberValue + (delta > 0 ? 1 : -1)));
+            } else if (req.kind == ChoiceRequest.Kind.DISTRIBUTE && distRowAt(req, mx, my) >= 0) {
+                nudge(req, distRowAt(req, mx, my), delta > 0 ? 1 : -1);
             } else {
                 optionScroll = Math.max(0, Math.min(Math.max(0, req.labels.size() - 8), optionScroll - (int) Math.signum(delta)));
             }
+            return true;
+        }
+        if (viewerOpen) {
+            viewerScroll = Math.max(0, viewerScroll - (int) Math.signum(delta));
             return true;
         }
         return super.mouseScrolled(mx, my, delta);
@@ -1457,8 +2285,26 @@ public class DuelScreen extends Screen {
 
     @Override
     public boolean keyPressed(int key, int scan, int mods) {
+        if (key == GLFW.GLFW_KEY_ESCAPE && viewerOpen) {
+            viewerOpen = false;
+            return true;
+        }
+        if (key == GLFW.GLFW_KEY_ESCAPE && showLog) {
+            showLog = false;
+            return true;
+        }
         if (key == GLFW.GLFW_KEY_V && ArenaRenderer.has(table)) {
             toggleView();
+            return true;
+        }
+        if (key == GLFW.GLFW_KEY_L) {
+            showLog = !showLog;
+            Theme.click();
+            return true;
+        }
+        if (key == GLFW.GLFW_KEY_Z) {
+            if (viewerOpen) viewerOpen = false;
+            else openViewer(duel.me(), ZoneType.Graveyard);
             return true;
         }
         if (key == GLFW.GLFW_KEY_TAB) {
