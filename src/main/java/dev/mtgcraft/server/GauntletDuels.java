@@ -410,6 +410,10 @@ public final class GauntletDuels {
             if (looker != null) {
                 for (Mob m : d.everyone) if (m.isAlive()) m.lookAt(EntityAnchorArgument.Anchor.EYES, looker.getEyePosition());
             }
+            // Undead don't burn in the sun while they're sitting at the table.
+            for (Mob m : d.everyone) {
+                if (m.isAlive() && m.isOnFire()) m.clearFire();
+            }
         }
     }
 

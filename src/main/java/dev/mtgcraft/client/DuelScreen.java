@@ -188,8 +188,15 @@ public class DuelScreen extends Screen {
         zoomW = sideW - 12;
         zoomH = (int) (zoomW * 88f / 63f);
         if (zoomH > maxZoomH) {
-            zoomH = Math.max(40, maxZoomH);
+            zoomH = maxZoomH;
             zoomW = (int) (zoomH * 63f / 88f);
+        }
+        if (zoomH < 80) {
+            // Too small to read on a small screen: leave the room to the instructions (hovering still shows
+            // the big preview).
+            zoomH = 0;
+            zoomW = 0;
+            zoomTop -= 4;
         }
         zoomX = boardW + (sideW - zoomW) / 2;
         zoomY = zoomTop;
@@ -1166,7 +1173,9 @@ public class DuelScreen extends Screen {
         }
         drawPhases(g, view, x, oppPillY + 39, w);
 
-        if (zoomCard != null && duel.mayView(zoomCard)) {
+        if (zoomH == 0) {
+            // no zoom panel on small screens
+        } else if (zoomCard != null && duel.mayView(zoomCard)) {
             drawCardFace(g, zoomCard, zoomX, zoomY, zoomW, zoomH, 1f);
         } else {
             Theme.rounded(g, zoomX, zoomY, zoomW, zoomH, 0x30FFFFFF);
@@ -1208,12 +1217,12 @@ public class DuelScreen extends Screen {
         boolean arenaToggle = ArenaRenderer.has(table);
         int n = arenaToggle ? 3 : 2;
         int bw = (w - (n - 1) * 3) / n;
-        toolButton(g, "Log (L)", x, bw, mx, my, showLog, () -> showLog = !showLog);
-        toolButton(g, "Zones (Z)", x + bw + 3, bw, mx, my, viewerOpen, () -> {
+        toolButton(g, "Log", x, bw, mx, my, showLog, () -> showLog = !showLog);
+        toolButton(g, "Zones", x + bw + 3, bw, mx, my, viewerOpen, () -> {
             if (viewerOpen) viewerOpen = false;
             else openViewer(duel.me(), ZoneType.Graveyard);
         });
-        if (arenaToggle) toolButton(g, arenaView ? "3D (V)" : "2D (V)", x + 2 * (bw + 3), bw, mx, my, arenaView, this::toggleView);
+        if (arenaToggle) toolButton(g, arenaView ? "3D view" : "2D view", x + 2 * (bw + 3), bw, mx, my, arenaView, this::toggleView);
     }
 
     private void toolButton(GuiGraphics g, String label, int x, int w, int mx, int my, boolean on, Runnable action) {
@@ -1369,8 +1378,10 @@ public class DuelScreen extends Screen {
             return new String[]{"Declare blockers", "Drag your creature onto an attacker to block it (or click the attacker, then your creature). Right-click undoes. Press " + ok + " when done."};
         }
         if (startingPlayerPrompt()) return new String[]{"Who goes first?", "Pick a player in the middle of the board."};
-        if (raw.startsWith("Pay Mana Cost")) {
-            return new String[]{"Pay the cost", raw.replace("Pay Mana Cost:", "Cost:") + "\nClick lands to tap them" + (duel.okEnabled ? ", or press " + ok + " to pay automatically." : ".")};
+        if (raw.contains("Pay Mana Cost")) {
+            String cost = raw.substring(raw.indexOf("Pay Mana Cost")).split("\n")[0].replace("Pay Mana Cost:", "Cost:").trim();
+            return new String[]{"Pay the cost", cost + "\nClick lands to tap them" + (duel.okEnabled ? ", or press " + ok + " to pay automatically." : ".")
+                    + (duel.cancelEnabled ? " " + duel.cancelLabel + " to stop casting." : "")};
         }
         if (duel.isSelecting() && hasTray()) return new String[]{"Choose", raw + "\nThe cards you can pick are in the middle of the board."};
         if (duel.isSelecting()) return new String[]{"Choose", raw + "\nGlowing cards can be picked."};
@@ -1452,6 +1463,8 @@ public class DuelScreen extends Screen {
         List<FormattedCharSequence> lines = new ArrayList<>();
         List<Integer> colors = new ArrayList<>();
         int maxLines = Math.max(4, (int) ((toolsY - 20) / 9f) - 2);
+        // Step-by-step phase changes and mana are noise here; the phase bar shows those.
+        log.removeIf(e -> e.type() == forge.game.GameLogEntryType.PHASE || e.type() == forge.game.GameLogEntryType.MANA);
         for (int i = 0; i < log.size() && lines.size() < maxLines; i++) {
             List<FormattedCharSequence> l = font.split(Component.literal(log.get(i).message()), lineW);
             for (int j = 0; j < l.size() && lines.size() < maxLines; j++) {
@@ -1528,11 +1541,16 @@ public class DuelScreen extends Screen {
         Theme.button(g, font, "✕", px + pw - 20, py + 6, 14, 14, mx, my, true, false);
         viewerHits.add(new Hit(px + pw - 20, py + 6, 14, 14, () -> viewerOpen = false));
 
-        // zone tabs
+        // zone tabs (short names when the board is narrow)
         ZoneType[] zones = {ZoneType.Graveyard, ZoneType.Exile, ZoneType.Command, ZoneType.Library, ZoneType.Hand};
+        String[] shortNames = {"GY", "Exile", "Cmd", "Lib", "Hand"};
+        int full = 0;
+        for (ZoneType z : zones) full += font.width(zoneName(z) + " " + p.getZoneSize(z)) + 13;
+        boolean narrow = full > pw - 30;
         tx = px + 6;
-        for (ZoneType z : zones) {
-            String label = zoneName(z) + " " + p.getZoneSize(z);
+        for (int zi = 0; zi < zones.length; zi++) {
+            ZoneType z = zones[zi];
+            String label = (narrow ? shortNames[zi] : zoneName(z)) + " " + p.getZoneSize(z);
             int tw = font.width(label) + 10;
             Theme.button(g, font, label, tx, py + 24, tw, 13, mx, my, true, z == viewerZone);
             PlayerView target = p;

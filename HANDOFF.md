@@ -80,6 +80,30 @@ sound, card art.
 - 3D pack and box models.
 - Arena renderer v1: billboarded floating cards.
 
+## Session 4 (2026-10-04, cloud): the user's "cluttered UI" list
+Done and compiling; the duel screen was checked with screenshots from a real dev client (see "Dev duel harness"):
+- **Wrong win/loss fixed:** Card-Forge's `getWinningTeam()` is -1 for a plain last-player-standing win, so the
+  gauntlet treated wins as losses (killed the player, mobs lived). `Matches` now reads the winner's team.
+- **Mobs always die when they lose; jockeys** (a mob riding a mob) are one seat named "<Mount> Jockey".
+- **Scry/surveil** "any number" choices could never be confirmed (negative bounds in `DuelGui.order`); fixed.
+  `manipulateCardList` (top/bottom moves) now asks; identical simultaneous triggers aren't asked to be ordered.
+- **Damage split screen:** new `ChoiceRequest.Kind.DISTRIBUTE` for combat damage (trample rule checked) and
+  divided damage/counters.
+- **DuelScreen:** log in a toggle panel (L); upright status chips (P/T green/red vs printed, counters, "Zz" for
+  summoning sickness, "→ target" for attackers in multiplayer); step banners for attack/block; plain sidebar
+  hints; Log / Zones / 2D-3D tool buttons; zone viewer (Z, zone chips, right-click a player) for every player's
+  graveyard, exile, command zone, library and hand, cards clickable; a pick tray in the middle for targets that
+  aren't on the table; commanders beside the hand (castable, tax shown); commander damage chips; dragging a
+  creature at an opponent in the main phase goes to combat and attacks; "Who goes first?" picker; overlays drawn
+  above card badges; gauntlet games end with "Collect reward".
+- 3D item models for the Deck Box, Universal Deck Box and Duel Gauntlet (`tools/make_gear_models.py`).
+
+### Dev duel harness
+`./gradlew runServer -PdevDuel` then `./gradlew runClient -PdevDuel` (client auto-joins localhost): the server
+challenges the player with a spider jockey and a zombie; the client screenshots the duel screen every 2.5 s into
+`run/screenshots/` and plays along (lands, a spell, attacks, default answers). Needs `run/eula.txt` and
+`online-mode=false` in `run/server.properties`. Code: `dev/DevDuel*.java`, off without the flag.
+
 ## Next tasks, in the order the user asked
 1. **Yu-Gi-Oh style 3D field** (`client/ArenaRenderer`); the user's latest request. They want:
    - **Cards lying flat on the floor** in glowing card zones in front of each duelist, like a Yu-Gi-Oh duel field:
