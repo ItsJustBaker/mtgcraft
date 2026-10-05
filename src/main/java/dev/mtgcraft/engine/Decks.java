@@ -80,7 +80,9 @@ public final class Decks {
         Path file = userDir().resolve(fileName);
         if (fileName.toLowerCase(Locale.ROOT).endsWith(".dck")) {
             // Read it ourselves: Card-Forge reads as UTF-8 only, and older files were saved in the Windows encoding.
-            return fromText(readText(file));
+            Deck deck = fromText(readText(file));
+            if (deck == null) throw new IOException(fileName + " isn't a deck file MTGCraft can read");
+            return deck;
         }
         String name = fileName.replaceFirst("\\.[^.]+$", "");
         return parse(readText(file), name).deck;
@@ -90,6 +92,7 @@ public final class Decks {
     public record Parsed(Deck deck, int cards, List<String> unknown) {}
 
     public static Parsed parse(String text, String fallbackName) {
+        if (text.startsWith("\uFEFF")) text = text.substring(1);
         DeckRecognizer recognizer = new DeckRecognizer();
         List<DeckRecognizer.Token> tokens = recognizer.parseCardList(text.split("\\R"));
         Deck deck = new Deck(fallbackName);
@@ -115,7 +118,10 @@ public final class Decks {
         Parsed parsed = parse(text, "Imported deck");
         if (parsed.cards == 0) return parsed;
         Files.createDirectories(userDir());
-        String base = parsed.deck.getName().replaceAll("[\\\\/:*?\"<>|]", "_").trim();
+        // Windows file name rules: no \\ / : * ? " < > | or control characters, no trailing dots or spaces, and no
+        // reserved device names (CON, PRN, AUX, NUL, COM1..9, LPT1..9).
+        String base = parsed.deck.getName().replaceAll("[\\\\/:*?\"<>|\\p{Cntrl}]", "_").trim().replaceAll("[. ]+$", "");
+        if (base.matches("(?i)(CON|PRN|AUX|NUL|COM[0-9]|LPT[0-9])(\\..*)?")) base = base + "_";
         if (base.isEmpty()) base = "Imported deck";
         Path file = userDir().resolve(base + ".dck");
         for (int i = 2; Files.exists(file); i++) {
@@ -153,6 +159,14 @@ public final class Decks {
     /** A text file as UTF-8 if it is valid UTF-8, otherwise as Windows-1252 (Notepad's old default, Card-Forge's on Windows). */
     public static String readText(Path file) throws IOException {
         byte[] bytes = Files.readAllBytes(file);
+        int n = bytes.length;
+        // Byte-order marks from Windows tools: Notepad "UTF-8 with BOM" and "Unicode" (UTF-16), PowerShell 5.1.
+        if (n >= 2 && ((bytes[0] == (byte) 0xFF && bytes[1] == (byte) 0xFE) || (bytes[0] == (byte) 0xFE && bytes[1] == (byte) 0xFF))) {
+            return new String(bytes, StandardCharsets.UTF_16);
+        }
+        if (n >= 3 && bytes[0] == (byte) 0xEF && bytes[1] == (byte) 0xBB && bytes[2] == (byte) 0xBF) {
+            return new String(bytes, 3, n - 3, StandardCharsets.UTF_8);
+        }
         try {
             return StandardCharsets.UTF_8.newDecoder()
                     .onMalformedInput(CodingErrorAction.REPORT)
@@ -164,6 +178,7 @@ public final class Decks {
     }
 
     public static Deck fromText(String dckText) {
+        if (dckText.startsWith("\uFEFF")) dckText = dckText.substring(1);
         return DeckSerializer.fromSections(FileSection.parseSections(List.of(dckText.split("\\R"))));
     }
 
