@@ -2216,13 +2216,21 @@ public class DuelScreen extends Screen {
         g.pose().popPose();
     }
 
+    /** Rewards that arrived while the result was still on screen; shown when the player moves on. */
+    private dev.mtgcraft.net.Packets.Rewards pendingRewards;
+
+    public void queueRewards(dev.mtgcraft.net.Packets.Rewards rewards) {
+        pendingRewards = rewards;
+    }
+
     private boolean clickGameOver(double mx, double my) {
         int[] p = gameOverPanel();
         if (gauntlet()) {
             if (in(mx, my, p[0] + 30, p[1] + 50, p[2] - 60, 20)) {
                 duel.leave();
                 ClientTables.forget(table);
-                minecraft.setScreen(null);
+                minecraft.setScreen(pendingRewards != null ? new RewardsScreen(pendingRewards) : null);
+                pendingRewards = null;
             }
             return true;
         }
@@ -2622,6 +2630,15 @@ public class DuelScreen extends Screen {
     /** Esc walks away from the table; the game waits, and right-clicking the table brings you back. */
     @Override
     public void onClose() {
+        if (pendingRewards != null) {
+            showRewards(pendingRewards);
+            pendingRewards = null;
+            return;
+        }
         super.onClose();
+    }
+
+    private void showRewards(dev.mtgcraft.net.Packets.Rewards r) {
+        minecraft.setScreen(new RewardsScreen(r));
     }
 }

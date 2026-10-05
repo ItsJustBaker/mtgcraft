@@ -83,8 +83,10 @@ public final class GauntletDuels {
         /** Mobs' gravity, and players' flight abilities, from before they were put on the floating stage. */
         final Map<UUID, Boolean> hadNoGravity = new HashMap<>();
         final Map<UUID, boolean[]> hadFlight = new HashMap<>();
-        /** Each player's podium spot; they're held there for the whole duel. */
+        /** Each duelist's podium spot (players and mobs); they're held there for the whole duel. */
         final Map<UUID, Vec3> spots = new HashMap<>();
+        /** The challengers' team name, when friends fight together. */
+        String teamName = "";
         MatchSetup setup;
         DuelHosting.Handle live;
         boolean over;
@@ -117,7 +119,21 @@ public final class GauntletDuels {
         long deadline;
         final Set<UUID> invited = new HashSet<>();
         final List<UUID> joined = new ArrayList<>();
+        String teamName;
     }
+
+    private static final String[] TEAM_A = {"Emerald", "Obsidian", "Crimson", "Golden", "Azure", "Ender", "Nether",
+            "Iron", "Mossy", "Glowing", "Diamond", "Copper", "Amethyst", "Redstone", "Frost"};
+    private static final String[] TEAM_B = {"Wolves", "Wizards", "Dragons", "Phoenixes", "Golems", "Planeswalkers",
+            "Guardians", "Foxes", "Axolotls", "Blazes", "Llamas", "Mages", "Knights", "Ravens", "Bees"};
+
+    private static String teamName(UUID host) {
+        java.util.Random r = new java.util.Random(host.getMostSignificantBits() ^ tick);
+        return "Team " + TEAM_A[r.nextInt(TEAM_A.length)] + " " + TEAM_B[r.nextInt(TEAM_B.length)];
+    }
+
+    /** Players just out of a duel, with the tick their safe time ends: mobs leave them alone until then. */
+    private static final Map<UUID, Long> GRACE = new HashMap<>();
 
     private static final Map<UUID, Lobby> LOBBIES = new LinkedHashMap<>();
     /** Player duel challenges: challenged player -> (challenger -> expiry tick). */
@@ -199,6 +215,7 @@ public final class GauntletDuels {
         }
         Lobby l = new Lobby();
         l.host = player.getUUID();
+        l.teamName = teamName(player.getUUID());
         l.target = mount(target);
         l.targetHadNoAi = l.target.isNoAi();
         l.target.setNoAi(true);
@@ -211,8 +228,11 @@ public final class GauntletDuels {
             o.sendSystemMessage(Component.literal(host + " is dueling " + target.getDisplayName().getString() + "! ")
                     .withStyle(ChatFormatting.GOLD)
                     .append(button("[Join]", "/mtgduel join " + host, ChatFormatting.GREEN, "Fight on " + host + "'s side")));
+            Net.toPlayer(o, new Packets.Prompt("Join the duel?",
+                    host + " is dueling " + target.getDisplayName().getString() + ". Join " + l.teamName + " and fight on their side!",
+                    List.of("Join", "No thanks"), List.of("/mtgduel join " + host, ""), JOIN_TICKS / 20));
         }
-        player.displayClientMessage(Component.literal("Friends nearby have 10 seconds to join...").withStyle(ChatFormatting.GOLD), true);
+        player.displayClientMessage(Component.literal("Friends nearby have 10 seconds to join " + l.teamName + "...").withStyle(ChatFormatting.GOLD), true);
     }
 
     /** A friend joins a mob duel that's about to start (from [Join] or right-clicking the challenger). */
@@ -239,8 +259,14 @@ public final class GauntletDuels {
         }
         l.joined.add(friend.getUUID());
         l.invited.remove(friend.getUUID());
-        tell(friend, "You joined " + host.getGameProfile().getName() + "'s duel. Stay close!");
-        tell(host, friend.getGameProfile().getName() + " joined your duel.");
+        String fname = friend.getGameProfile().getName();
+        friend.displayClientMessage(Component.literal("You joined " + l.teamName + " with " + host.getGameProfile().getName() + ". Stay close!")
+                .withStyle(ChatFormatting.GREEN), false);
+        host.displayClientMessage(Component.literal(fname + " joined " + l.teamName + "!").withStyle(ChatFormatting.GREEN), false);
+        for (UUID other : l.joined) {
+            ServerPlayer o = DuelHosting.online(host.getServer(), other);
+            if (o != null && o != friend) o.displayClientMessage(Component.literal(fname + " joined " + l.teamName + "!").withStyle(ChatFormatting.GREEN), false);
+        }
         if (l.invited.isEmpty()) l.deadline = tick;
     }
 
@@ -263,18 +289,23 @@ public final class GauntletDuels {
             }
             friends.add(f);
         }
-        startMobDuel(host, l.target, friends);
+        startMobDuel(host, l.target, friends, l.teamName);
     }
 
     private static void startMobDuel(ServerPlayer player, Mob target, List<ServerPlayer> friends) {
+        startMobDuel(player, target, friends, teamName(player.getUUID()));
+    }
+
+    private static void startMobDuel(ServerPlayer player, Mob target, List<ServerPlayer> friends, String teamName) {
         if (BY_PLAYER.containsKey(player.getUUID()) || BY_MOB.containsKey(target.getUUID()) || !target.isAlive()) return;
         DeckChoice myDeck = deckOf(player, false);
         if (myDeck == null) return;
 
         Duel d = new Duel();
         d.level = player.serverLevel();
-        d.boss = MobThemes.isBoss(target);
+        d.boss = MobThemes.isBoss(target) || MobThemes.isBoss(mount(target));
         d.radius = d.boss ? 7.5f : 5f;
+        d.teamName = teamName;
 
         // Just the one mob, unless the challenger's gauntlet is set to group fights (shift + right-click in the air).
         boolean group = GauntletItem.groupFights(player.getMainHandItem()) || GauntletItem.groupFights(player.getOffhandItem());
@@ -318,26 +349,41 @@ public final class GauntletDuels {
         for (Mob m : d.mobs) for (Mob g : group(m)) widest = Math.max(widest, g.getBbWidth());
         int duelists = humans.size() + d.mobs.size();
         d.radius += (float) (Math.max(0, widest - 1) * 1.3 + (duelists > 2 ? 1.5 : 0));
-        Vec3 mid = player.position().add(seat.position()).scale(0.5);
+        Vec3 mid = d.boss && target instanceof net.minecraft.world.entity.boss.enderdragon.EnderDragon
+                ? player.position().add(seat.position().subtract(player.position()).normalize().scale(d.radius)) // the dragon comes to you
+                : player.position().add(seat.position()).scale(0.5);
         d.center = new Vec3(mid.x, stageHeight(d.level, mid, d.radius + 1.5f), mid.z);
+        // Underground (or in a forest), shrink the arena to the open space so nobody ends up inside a wall.
+        d.radius = fitRadius(d.level, d.center, d.radius);
+
+        // How tough the opponents are: critters and common mobs play a quick classic duel at low life.
+        MobThemes.Tier tier = MobThemes.Tier.CRITTER;
+        for (Mob m : d.mobs) {
+            MobThemes.Tier t = MobThemes.tier(rider(m));
+            if (t.ordinal() > tier.ordinal()) tier = t;
+        }
+        boolean quick = !d.boss && MtgConfig.QUICK_DUELS.get() && MobThemes.quickLife(tier) > 0;
 
         // Commander needs everyone at the table to bring a real 100-card deck with a commander;
         // otherwise this duel is played with classic rules.
-        boolean commander = MtgConfig.DUEL_MODE.get() == MtgConfig.DuelMode.COMMANDER;
-        if (commander && !d.boss) {
+        boolean commander = MtgConfig.DUEL_MODE.get() == MtgConfig.DuelMode.COMMANDER || d.boss;
+        if (commander && !quick) {
             for (DeckChoice c : humans.values()) {
                 if (!commanderReady(c)) {
                     commander = false;
-                    for (ServerPlayer p : humans.keySet()) tell(p, "Classic duel: Commander needs a 100-card deck with a commander for everyone.");
+                    if (!d.boss) for (ServerPlayer p : humans.keySet()) tell(p, "Classic duel: Commander needs a 100-card deck with a commander for everyone.");
                     break;
                 }
             }
         }
+        if (quick) commander = false;
         MatchSetup setup = new MatchSetup();
-        setup.mode = d.boss ? MatchSetup.Mode.ARCHENEMY : commander ? MatchSetup.Mode.COMMANDER : MatchSetup.Mode.TEAMS;
+        // Bosses fight as the Archenemy; with commander decks all round, Archenemy Commander.
+        setup.mode = d.boss ? (commander ? MatchSetup.Mode.ARCHENEMY_COMMANDER : MatchSetup.Mode.ARCHENEMY)
+                : commander ? MatchSetup.Mode.COMMANDER : MatchSetup.Mode.TEAMS;
         List<Entity> seatEntities = new ArrayList<>();
         // The Archenemy sits in seat 1 (index 0); otherwise the players come first.
-        if (d.boss) addMobSeats(d, setup, seatEntities, false);
+        if (d.boss) addMobSeats(d, setup, seatEntities, commander);
         for (Map.Entry<ServerPlayer, DeckChoice> h : humans.entrySet()) {
             ServerPlayer p = h.getKey();
             d.players.put(p.getUUID(), setup.seats.size());
@@ -345,8 +391,13 @@ public final class GauntletDuels {
             seatEntities.add(p);
         }
         if (!d.boss) addMobSeats(d, setup, seatEntities, commander);
+        if (quick) {
+            int life = MobThemes.quickLife(tier);
+            for (MatchSetup.Seat st : setup.seats) if (st.ai) st.startingLife = life;
+        }
         d.setup = setup;
         takeSeats(d, player, seatEntities);
+        stopTargeting(d.level, d.center, d.radius + 24, d.players.keySet());
 
         // Freeze everyone at the table.
         for (Mob m : d.everyone) {
@@ -356,6 +407,10 @@ public final class GauntletDuels {
             m.getNavigation().stop();
             m.setPersistenceRequired();
             m.lookAt(EntityAnchorArgument.Anchor.EYES, player.getEyePosition());
+            if (m instanceof net.minecraft.world.entity.boss.enderdragon.EnderDragon dragon) {
+                // The dragon ignores NoAI; make it hover on its spot instead.
+                dragon.getPhaseManager().setPhase(net.minecraft.world.entity.boss.enderdragon.phases.EnderDragonPhase.HOVERING);
+            }
             BY_MOB.put(m.getUUID(), d);
         }
         for (UUID id : d.players.keySet()) BY_PLAYER.put(id, d);
@@ -384,10 +439,13 @@ public final class GauntletDuels {
             if (who.length() > 0) who.append(", ");
             who.append(s.name);
         }
-        String vs = (humans.size() > 1 ? "Your team" : "You") + " vs " + who
-                + (d.boss ? " (Archenemy)" : commander ? " (Commander)" : "");
+        String kind = d.boss ? (commander ? "Archenemy Commander" : "Archenemy") : quick ? "Quick duel" : commander ? "Commander" : "Duel";
+        StringBuilder names = new StringBuilder();
+        for (ServerPlayer p : humans.keySet()) names.append(names.length() > 0 ? ", " : "").append(p.getGameProfile().getName());
+        String vs = (humans.size() > 1 ? d.teamName + " (" + names + ")" : "You") + " vs " + who + " · " + kind;
         for (ServerPlayer p : humans.keySet()) {
-            p.displayClientMessage(Component.literal("Duel! " + vs).withStyle(ChatFormatting.GOLD), true);
+            p.displayClientMessage(Component.literal(vs).withStyle(ChatFormatting.GOLD), false);
+            title(p, humans.size() > 1 ? d.teamName : "Duel!", (humans.size() > 1 ? names + " vs " : "vs ") + who);
         }
     }
 
@@ -416,6 +474,11 @@ public final class GauntletDuels {
             Entity e = seats.get(i);
             double a = a0 + (i - challengerIndex) * Math.PI * 2 / seats.size();
             double x = c.x + Math.cos(a) * ring, z = c.z + Math.sin(a) * ring;
+            if (!clear(d.level, x, c.y, z, e.getBbHeight())) {
+                // No room there (a cave wall, a tree): stay put and duel from where you stand.
+                x = e.getX();
+                z = e.getZ();
+            }
             float yaw = (float) (Math.toDegrees(Math.atan2(c.z - z, c.x - x)) - 90);
             if (e instanceof ServerPlayer p) {
                 // Hover on the stage: flight for the duel, given back afterwards.
@@ -436,8 +499,63 @@ public final class GauntletDuels {
                 e.moveTo(x, c.y, z, yaw, 0);
                 e.setYHeadRot(yaw);
                 e.setYBodyRot(yaw);
+                d.spots.put(e.getUUID(), new Vec3(x, c.y, z));
             }
         }
+    }
+
+    /** Whether an entity this tall fits at this spot (nothing solid at its feet or head). */
+    private static boolean clear(ServerLevel level, double x, double y, double z, float height) {
+        BlockPos feet = BlockPos.containing(x, y + 0.05, z);
+        for (int dy = 0; dy < Math.max(2, (int) Math.ceil(height)); dy++) {
+            BlockPos p = feet.above(dy);
+            if (!level.getBlockState(p).getCollisionShape(level, p).isEmpty()) return false;
+        }
+        return true;
+    }
+
+    /**
+     * The biggest arena (up to {@code wanted}) whose floor is open: in a cave or a cramped room the arena shrinks
+     * to the space there is, down to a 3-block circle.
+     */
+    private static float fitRadius(ServerLevel level, Vec3 c, float wanted) {
+        for (float r = wanted; r > 3; r -= 0.5f) {
+            int ok = 0, total = 0;
+            for (float ring : new float[]{r * 0.9f, r * 0.55f}) {
+                int pts = ring > 4 ? 24 : 12;
+                for (int i = 0; i < pts; i++) {
+                    double a = i * Math.PI * 2 / pts;
+                    total++;
+                    if (clear(level, c.x + Math.cos(a) * ring, c.y, c.z + Math.sin(a) * ring, 2)) ok++;
+                }
+            }
+            if (ok >= total * 0.85) return r;
+        }
+        return 3f;
+    }
+
+    /** Big text in the middle of a player's screen. */
+    private static void title(ServerPlayer p, String title, String subtitle) {
+        p.connection.send(new net.minecraft.network.protocol.game.ClientboundSetTitlesAnimationPacket(5, 50, 15));
+        p.connection.send(new net.minecraft.network.protocol.game.ClientboundSetSubtitleTextPacket(Component.literal(subtitle).withStyle(ChatFormatting.GRAY)));
+        p.connection.send(new net.minecraft.network.protocol.game.ClientboundSetTitleTextPacket(Component.literal(title).withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD)));
+    }
+
+    /** Mobs around the duel stop hunting the duelists (they're on the stage, and then on their safe time). */
+    private static void stopTargeting(ServerLevel level, Vec3 center, double range, Set<UUID> players) {
+        for (Mob m : level.getEntitiesOfClass(Mob.class, new net.minecraft.world.phys.AABB(center, center).inflate(range))) {
+            if (m.getTarget() != null && players.contains(m.getTarget().getUUID())) {
+                m.setTarget(null);
+                m.getBrain().eraseMemory(net.minecraft.world.entity.ai.memory.MemoryModuleType.ATTACK_TARGET);
+                m.getNavigation().stop();
+            }
+        }
+    }
+
+    private static boolean safe(UUID id) {
+        if (BY_PLAYER.containsKey(id)) return true;
+        Long until = GRACE.get(id);
+        return until != null && until > tick;
     }
 
     /**
@@ -533,6 +651,15 @@ public final class GauntletDuels {
         }
         DuelHosting.Handle live = d.live;
         LATER.add(() -> { if (live != null) live.close(); });
+        // Safe time: mobs nearby leave everyone alone for a bit after the duel.
+        long graceEnd = tick + MtgConfig.GRACE_SECONDS.get() * 20L;
+        for (UUID id : d.players.keySet()) GRACE.put(id, graceEnd);
+        stopTargeting(d.level, d.center, d.radius + 24, d.players.keySet());
+        for (Mob m : d.everyone) {
+            if (m instanceof net.minecraft.world.entity.boss.enderdragon.EnderDragon dragon && dragon.isAlive()) {
+                dragon.getPhaseManager().setPhase(net.minecraft.world.entity.boss.enderdragon.phases.EnderDragonPhase.HOLDING_PATTERN);
+            }
+        }
         if (result == null) return;
 
         List<ServerPlayer> online = new ArrayList<>();
@@ -557,10 +684,19 @@ public final class GauntletDuels {
             for (ServerPlayer p : online) {
                 p.displayClientMessage(Component.literal("Victory!").withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD), true);
             }
-            // Every mob at the table falls. A jockey drops one set of loot (from its rider).
-            for (Mob seat : d.mobs) {
-                DEFEATED.add(rider(seat).getUUID());
+            // Everyone who fought gets their own rewards, straight into their inventory, and sees what they got.
+            for (ServerPlayer p : online) {
+                if (d.forfeited.contains(p.getUUID())) continue;
+                List<ItemStack> loot = DuelLoot.duelRewards(d.mobs.stream().map(GauntletDuels::rider).toList(), d.boss);
+                for (ItemStack it : loot) {
+                    ItemStack give = it.copy();
+                    if (!p.getInventory().add(give)) p.drop(give, false);
+                }
+                String sub = d.players.size() > 1 ? d.teamName + " wins!" : "You beat " + String.join(", ", seatNames(d)) + ".";
+                Net.toPlayer(p, new Packets.Rewards("Victory!", sub, loot));
             }
+            // Every mob at the table falls. Rewards were handed out above, so their deaths drop no extra packs.
+            for (Mob m : d.everyone) DEFEATED.add(m.getUUID());
             for (Mob m : d.everyone) {
                 if (!m.isAlive()) continue;
                 m.hurt(credit != null ? credit.damageSources().playerAttack(credit) : m.damageSources().magic(), Float.MAX_VALUE);
@@ -582,6 +718,12 @@ public final class GauntletDuels {
                 case NONE -> tell(p, "You lost the duel.");
             }
         }
+    }
+
+    private static List<String> seatNames(Duel d) {
+        List<String> out = new ArrayList<>();
+        for (MatchSetup.Seat st : d.setup.seats) if (st.ai) out.add(st.name);
+        return out;
     }
 
     private static void tell(ServerPlayer p, String msg) {
@@ -618,6 +760,8 @@ public final class GauntletDuels {
                 .append(button("[Accept]", "/mtgduel accept " + fromName, ChatFormatting.GREEN, "Duel " + fromName + " (nobody dies)"))
                 .append(Component.literal(" "))
                 .append(button("[Decline]", "/mtgduel decline " + fromName, ChatFormatting.RED, "No thanks")));
+        Net.toPlayer(to, new Packets.Prompt("Duel challenge!", fromName + " challenges you to a friendly duel. Nobody dies; the winner gets bragging rights.",
+                List.of("Accept", "Decline"), List.of("/mtgduel accept " + fromName, "/mtgduel decline " + fromName), INVITE_TICKS / 20));
         tell(from, "Challenge sent to " + toName + ". They have 60 seconds to accept.");
     }
 
@@ -731,10 +875,24 @@ public final class GauntletDuels {
 
     // ------------------------------------------------------------------ events
 
-    /** Nobody at the table can be hurt while the duel runs. */
+    /** Nobody at the table can be hurt while the duel runs; afterwards, mobs can't hurt the duelists for a while. */
     @SubscribeEvent
     public static void noHarm(LivingAttackEvent event) {
-        if (inDuel(event.getEntity().getUUID())) event.setCanceled(true);
+        UUID id = event.getEntity().getUUID();
+        if (inDuel(id)) {
+            event.setCanceled(true);
+        } else if (safe(id) && !(event.getSource().getEntity() instanceof net.minecraft.world.entity.player.Player)
+                && event.getSource().getEntity() != null) {
+            event.setCanceled(true);
+        }
+    }
+
+    /** Mobs don't pick duelists (or players on their safe time) as targets. */
+    @SubscribeEvent
+    public static void noTargeting(net.minecraftforge.event.entity.living.LivingChangeTargetEvent event) {
+        if (event.getNewTarget() instanceof ServerPlayer p && safe(p.getUUID()) && event.getEntity() instanceof Mob) {
+            event.setCanceled(true);
+        }
     }
 
     @SubscribeEvent
@@ -757,6 +915,7 @@ public final class GauntletDuels {
         if (tick % 200 == 0) {
             INVITES.values().forEach(m -> m.values().removeIf(exp -> exp < tick));
             INVITES.values().removeIf(Map::isEmpty);
+            GRACE.values().removeIf(until -> until < tick);
         }
         if (tick % 2 != 0) return;
         Set<Duel> duels = new HashSet<>(BY_PLAYER.values());
@@ -785,6 +944,15 @@ public final class GauntletDuels {
                 }
             }
             if (d.over) continue;
+            // Mobs (the dragon especially) stay on their spots.
+            for (Mob m : d.mobs) {
+                Vec3 spot = d.spots.get(m.getUUID());
+                if (spot != null && m.isAlive() && m.position().distanceToSqr(spot) > 0.5) {
+                    m.moveTo(spot.x, spot.y, spot.z, m.getYRot(), m.getXRot());
+                    m.setDeltaMovement(Vec3.ZERO);
+                }
+            }
+            if (tick % 20 == 0) stopTargeting(d.level, d.center, d.radius + 24, d.players.keySet());
             runeCircle(d);
             if (looker != null) {
                 for (Mob m : d.everyone) if (m.isAlive()) m.lookAt(EntityAnchorArgument.Anchor.EYES, looker.getEyePosition());

@@ -156,6 +156,62 @@ public final class Packets {
         }
     }
 
+    // ------------------------------------------------------------------ popups
+
+    /**
+     * A small popup with buttons (duel invites, join requests). Each button runs a command as the player, e.g.
+     * {@code /mtgduel accept Steve}. {@code seconds} is how long the offer lasts (0: no timer).
+     */
+    public record Prompt(String title, String body, List<String> buttons, List<String> commands, int seconds) {
+        public void write(FriendlyByteBuf buf) {
+            buf.writeUtf(title);
+            buf.writeUtf(body);
+            buf.writeVarInt(buttons.size());
+            for (int i = 0; i < buttons.size(); i++) {
+                buf.writeUtf(buttons.get(i));
+                buf.writeUtf(commands.get(i));
+            }
+            buf.writeVarInt(seconds);
+        }
+
+        public static Prompt read(FriendlyByteBuf buf) {
+            String title = buf.readUtf(), body = buf.readUtf();
+            int n = buf.readVarInt();
+            List<String> buttons = new ArrayList<>(), commands = new ArrayList<>();
+            for (int i = 0; i < n; i++) {
+                buttons.add(buf.readUtf());
+                commands.add(buf.readUtf());
+            }
+            return new Prompt(title, body, buttons, commands, buf.readVarInt());
+        }
+
+        public void handle(Supplier<NetworkEvent.Context> ctx) {
+            DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> dev.mtgcraft.client.PromptScreen.show(this));
+        }
+    }
+
+    /** What a player won from a duel, for the rewards screen. */
+    public record Rewards(String title, String subtitle, List<net.minecraft.world.item.ItemStack> items) {
+        public void write(FriendlyByteBuf buf) {
+            buf.writeUtf(title);
+            buf.writeUtf(subtitle);
+            buf.writeVarInt(items.size());
+            for (var s : items) buf.writeItem(s);
+        }
+
+        public static Rewards read(FriendlyByteBuf buf) {
+            String title = buf.readUtf(), sub = buf.readUtf();
+            int n = buf.readVarInt();
+            List<net.minecraft.world.item.ItemStack> items = new ArrayList<>();
+            for (int i = 0; i < n; i++) items.add(buf.readItem());
+            return new Rewards(title, sub, items);
+        }
+
+        public void handle(Supplier<NetworkEvent.Context> ctx) {
+            DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> dev.mtgcraft.client.RewardsScreen.show(this));
+        }
+    }
+
     // ------------------------------------------------------------------ starter deck
 
     public record OfferStarter(List<String> names) {

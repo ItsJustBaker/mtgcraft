@@ -22,7 +22,9 @@ public final class MatchSetup {
         PLANECHASE("Planechase", "Roll the planar die and travel between wild planes.", EnumSet.of(GameType.Planechase), true),
         ARCHENEMY("Archenemy", "Seat 1 is the Archenemy: 40 life and a scheme deck. Everyone else teams up.", EnumSet.of(GameType.Archenemy), false),
         MOMIR("Momir Basic", "Basic lands only. Discard a land to make a random creature.", EnumSet.of(GameType.MomirBasic), true),
-        MOJHOSTO("MoJhoSto", "Momir plus random instants and sorceries. Pure chaos.", EnumSet.of(GameType.MoJhoSto), true);
+        MOJHOSTO("MoJhoSto", "Momir plus random instants and sorceries. Pure chaos.", EnumSet.of(GameType.MoJhoSto), true),
+        ARCHENEMY_COMMANDER("Archenemy Commander", "Commander, but seat 1 is the Archenemy: 60 life and a scheme deck against everyone.",
+                EnumSet.of(GameType.Archenemy, GameType.Commander), false);
 
         public final String label;
         public final String description;
@@ -42,6 +44,11 @@ public final class MatchSetup {
                     || variants.contains(GameType.Oathbreaker);
         }
 
+        /** Seat 1 plays the Archenemy against everyone else. */
+        public boolean isArchenemy() {
+            return variants.contains(GameType.Archenemy);
+        }
+
         public boolean autoDecks() {
             return variants.contains(GameType.MomirBasic) || variants.contains(GameType.MoJhoSto);
         }
@@ -55,6 +62,8 @@ public final class MatchSetup {
         public DeckChoice deck;
         /** 0 means "no team" (everyone is their own team). */
         public int team;
+        /** Life to start with instead of the format's usual total; 0 keeps the usual. Quick mob duels use it. */
+        public int startingLife;
 
         public Seat(boolean ai, String name, UUID player, DeckChoice deck, int team) {
             this.ai = ai;
@@ -74,7 +83,7 @@ public final class MatchSetup {
 
     /** The team each seat actually plays on (Archenemy and free-for-all decide it themselves). */
     public int effectiveTeam(int seatIndex) {
-        if (mode == Mode.ARCHENEMY) return seatIndex == 0 ? 1 : 2;
+        if (mode.isArchenemy()) return seatIndex == 0 ? 1 : 2;
         if (mode == Mode.FREE_FOR_ALL) return seatIndex + 1;
         int t = seats.get(seatIndex).team;
         return t > 0 ? t : 100 + seatIndex;

@@ -14,6 +14,8 @@ public final class MtgConfig {
     public static final ForgeConfigSpec.DoubleValue SET_PACK_DROP_CHANCE;
     public static final ForgeConfigSpec.BooleanValue STARTER_KIT;
     public static final ForgeConfigSpec.BooleanValue GROUP_FIGHTS;
+    public static final ForgeConfigSpec.BooleanValue QUICK_DUELS;
+    public static final ForgeConfigSpec.IntValue GRACE_SECONDS;
 
     static {
         ForgeConfigSpec.Builder b = new ForgeConfigSpec.Builder();
@@ -27,6 +29,11 @@ public final class MtgConfig {
         GROUP_FIGHTS = b.comment("Default Duel Gauntlet mode. false: 1v1 duels. true: nearby mobs and friends join.",
                         "Each gauntlet can be switched with shift + right-click in the air.")
                 .define("groupFights", false);
+        QUICK_DUELS = b.comment("Quick duels against weak mobs: critters start at 6 life and common mobs at 12, with classic rules.",
+                        "Tough mobs play a full game; bosses fight as the Archenemy (Archenemy Commander when everyone has a commander deck).")
+                .define("quickDuels", true);
+        GRACE_SECONDS = b.comment("After a duel, mobs leave the duelists alone for this many seconds.")
+                .defineInRange("graceSeconds", 15, 0, 120);
         b.pop();
         b.push("drops");
         PACK_DROP_CHANCE = b.comment("Chance a hostile mob killed by a player drops a themed booster pack.")

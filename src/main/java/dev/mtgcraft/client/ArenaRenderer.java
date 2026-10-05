@@ -146,6 +146,9 @@ public final class ArenaRenderer {
         float k = 1 - (float) Math.exp(-dt * 8);
         PlayerView me = duel.gui.me();
 
+        CENTER_NOW = center.add(0, 1.6 * s, 0);
+        stack(gv, center, s, pose, cam, buffers, now);
+
         List<Packets.ArenaSeat> seats = a.seats();
         for (int i = 0; i < seats.size(); i++) {
             Packets.ArenaSeat seat = seats.get(i);
@@ -201,6 +204,17 @@ public final class ArenaRenderer {
                 flat(pose, cam, buffers, gy.get(gy.size() - 1), gyAt.add(0, 0.01, 0), r, f, cw, ch, false, 0xE0);
                 label(pose, cam, buffers, gyAt.add(0, 0.25 * s, 0), "Graveyard " + gy.size(), 0xFFC8C8C8, s);
             }
+            // Exile: a swirling void beside the front row, swallowing the last card exiled.
+            Vec3 exAt = front.add(r.scale(-side));
+            List<CardView> ex = cards(pv, ZoneType.Exile);
+            voidPortal(pose, cam, buffers, exAt, (float) (cw * 0.75), now, a.boss());
+            if (!ex.isEmpty()) {
+                double spin = now / 700.0;
+                double shrink = 0.55 + 0.1 * Math.sin(now / 500.0);
+                Vec3 rr = new Vec3(Math.cos(spin), 0, Math.sin(spin)), ff = new Vec3(-rr.z, 0, rr.x);
+                flat(pose, cam, buffers, ex.get(ex.size() - 1), exAt.add(0, 0.02, 0), rr, ff, cw * shrink, ch * shrink, false, 0xB0);
+                label(pose, cam, buffers, exAt.add(0, 0.25 * s, 0), "Exile " + ex.size(), 0xFFD0A0FF, s);
+            }
             List<CardView> cmd = cards(pv, ZoneType.Command);
             if (!cmd.isEmpty()) {
                 frame(pose, cam, buffers, cmdAt, r, f, cw, ch, GOLD);
@@ -245,7 +259,8 @@ public final class ArenaRenderer {
             Vec3 target = rowCenter.add(r.scale(start + i * step));
             if (attacking) target = target.add(f.scale(1.6 * s));
             if (blocking) target = target.add(f.scale(0.7 * s));
-            Vec3 cur = POS.getOrDefault(c.getId(), target.add(0, 0.6, 0));
+            // A card that just arrived flies out from the middle of the field, where it was cast.
+            Vec3 cur = POS.getOrDefault(c.getId(), CENTER_NOW != null ? CENTER_NOW : target.add(0, 0.6, 0));
             cur = cur.add(target.subtract(cur).scale(k));
             POS.put(c.getId(), cur);
             float turn = TURN.getOrDefault(c.getId(), 0f);
@@ -262,6 +277,62 @@ public final class ArenaRenderer {
                 upright(pose, cam, buffers, c, holo, 0.55 * s, 0, 0xB8);
             }
         }
+    }
+
+    /** The middle of the arena being drawn (where newly played cards come from). */
+    private static Vec3 CENTER_NOW;
+
+    /**
+     * Spells and abilities on the stack float above the centre of the field, big enough to read, the newest on top,
+     * slowly turning so everyone around the ring can see them.
+     */
+    private static void stack(GameView gv, Vec3 center, float s, PoseStack pose, Camera cam, MultiBufferSource buffers, long now) {
+        List<forge.game.spellability.StackItemView> items;
+        try {
+            items = new ArrayList<>((Collection<forge.game.spellability.StackItemView>) gv.getStack());
+        } catch (RuntimeException concurrentEdit) {
+            return;
+        }
+        int n = items.size();
+        for (int i = n - 1; i >= 0; i--) {
+            CardView src = items.get(i).getSourceCard();
+            if (src == null) continue;
+            // index 0 is the top of the stack: highest and in front
+            double lift = (n - 1 - i) * 0.35 * s;
+            double bob = Math.sin((now + i * 500L) / 700.0) * 0.06 * s;
+            Vec3 at = center.add(0, (1.4 + lift) * s + bob, 0);
+            beam(pose, cam, buffers, center.add(0, 0.05, 0), at, i == 0 ? 0x60FFD050 : 0x3050E0FF);
+            upright(pose, cam, buffers, src, at, (i == 0 ? 1.1 : 0.8) * s, 0, i == 0 ? 0xF0 : 0xA0);
+        }
+    }
+
+    /** A swirling purple-black vortex on the floor: the exile zone. */
+    private static void voidPortal(PoseStack pose, Camera cam, MultiBufferSource buffers, Vec3 at, float radius, long now, boolean boss) {
+        Vec3 o = at.subtract(cam.getPosition()).add(0, 0.008, 0);
+        VertexConsumer vc = buffers.getBuffer(RenderType.lightning());
+        Matrix4f m = pose.last().pose();
+        // dark core
+        ring(vc, m, o, radius * 0.55, radius * 0.55, 0xC0100018, 24, 0);
+        // spiral arms turning inward
+        double spin = now / 600.0;
+        int arms = 5;
+        for (int a = 0; a < arms; a++) {
+            Vec3 prev = null;
+            for (int k = 0; k <= 14; k++) {
+                double t = k / 14.0;
+                double ang = spin + a * Math.PI * 2 / arms + t * 2.6;
+                double rad = radius * (1 - t * 0.85);
+                Vec3 p = o.add(Math.cos(ang) * rad, 0.001 * k, Math.sin(ang) * rad);
+                if (prev != null) {
+                    int alpha = (int) (40 + 140 * t);
+                    int col = (alpha << 24) | (boss ? 0xC040FF : 0x9050FF);
+                    strip(vc, m, prev, p, new Vec3(0, 1, 0).cross(p.subtract(prev)), 0.07 * (1 - t * 0.6) * radius / 0.35, col);
+                }
+                prev = p;
+            }
+        }
+        // a faint glowing rim
+        ring(vc, m, o, radius, 0.04, 0x70B080FF, 40, -spin);
     }
 
     // ------------------------------------------------------------------ drawing primitives
