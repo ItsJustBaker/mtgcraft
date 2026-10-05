@@ -34,7 +34,7 @@ public final class DuelIntro {
     /** Plays the intro, then runs {@code after} (opening the duel screen). Main thread. */
     public static void play(Runnable after) {
         Minecraft mc = Minecraft.getInstance();
-        if (mc.player == null) {
+        if (mc.player == null || !dev.mtgcraft.MtgClientConfig.DUEL_INTRO.get()) {
             after.run();
             return;
         }

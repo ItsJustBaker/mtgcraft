@@ -91,6 +91,12 @@ public final class DuelHosting {
      */
     public static Handle launch(MinecraftServer server, MatchSetup setup, BlockPos key,
                                 Consumer<String> onError, Consumer<Matches.Result> onOver) {
+        return launch(server, setup, key, false, onError, onOver);
+    }
+
+    /** @param gauntlet a Duel Gauntlet fight rather than a Magic Table game */
+    public static Handle launch(MinecraftServer server, MatchSetup setup, BlockPos key, boolean gauntlet,
+                                Consumer<String> onError, Consumer<Matches.Result> onOver) {
         Handle h = new Handle();
         Map<Integer, IGuiGame> guis = new HashMap<>();
         for (int i = 0; i < setup.seats.size(); i++) {
@@ -113,7 +119,7 @@ public final class DuelHosting {
             h.seats.put(i, seat);
             h.ids.put(i, id);
             guis.put(i, seat.gui);
-            Net.toPlayer(p, new Packets.DuelStart(id, key));
+            Net.toPlayer(p, new Packets.DuelStart(id, key, gauntlet));
         }
         Matches.start(setup, guis,
                 err -> server.execute(() -> onError.accept(err)),

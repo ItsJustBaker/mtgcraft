@@ -80,6 +80,30 @@ sound, card art.
 - 3D pack and box models.
 - Arena renderer v1: billboarded floating cards.
 
+## Session 4 (2026-10-04, cloud): the user's "cluttered UI" list
+Done and compiling; the duel screen was checked with screenshots from a real dev client (see "Dev duel harness"):
+- **Wrong win/loss fixed:** Card-Forge's `getWinningTeam()` is -1 for a plain last-player-standing win, so the
+  gauntlet treated wins as losses (killed the player, mobs lived). `Matches` now reads the winner's team.
+- **Mobs always die when they lose; jockeys** (a mob riding a mob) are one seat named "<Mount> Jockey".
+- **Scry/surveil** "any number" choices could never be confirmed (negative bounds in `DuelGui.order`); fixed.
+  `manipulateCardList` (top/bottom moves) now asks; identical simultaneous triggers aren't asked to be ordered.
+- **Damage split screen:** new `ChoiceRequest.Kind.DISTRIBUTE` for combat damage (trample rule checked) and
+  divided damage/counters.
+- **DuelScreen:** log in a toggle panel (L); upright status chips (P/T green/red vs printed, counters, "Zz" for
+  summoning sickness, "→ target" for attackers in multiplayer); step banners for attack/block; plain sidebar
+  hints; Log / Zones / 2D-3D tool buttons; zone viewer (Z, zone chips, right-click a player) for every player's
+  graveyard, exile, command zone, library and hand, cards clickable; a pick tray in the middle for targets that
+  aren't on the table; commanders beside the hand (castable, tax shown); commander damage chips; dragging a
+  creature at an opponent in the main phase goes to combat and attacks; "Who goes first?" picker; overlays drawn
+  above card badges; gauntlet games end with "Collect reward".
+- 3D item models for the Deck Box, Universal Deck Box and Duel Gauntlet (`tools/make_gear_models.py`).
+
+### Dev duel harness
+`./gradlew runServer -PdevDuel` then `./gradlew runClient -PdevDuel` (client auto-joins localhost): the server
+challenges the player with a spider jockey and a zombie; the client screenshots the duel screen every 2.5 s into
+`run/screenshots/` and plays along (lands, a spell, attacks, default answers). Needs `run/eula.txt` and
+`online-mode=false` in `run/server.properties`. Code: `dev/DevDuel*.java`, off without the flag.
+
 ## Next tasks, in the order the user asked
 1. **Yu-Gi-Oh style 3D field** (`client/ArenaRenderer`); the user's latest request. They want:
    - **Cards lying flat on the floor** in glowing card zones in front of each duelist, like a Yu-Gi-Oh duel field:
@@ -125,3 +149,26 @@ sound, card art.
   name, as `ArenaRenderer` does.
 - **Copyright:** never bundle copyrighted audio or art. Generated art and Scryfall downloads at runtime (like
   Card-Forge itself does) are fine.
+
+## Session 5 (2026-10-04, local): merged the cloud session into kh/mtgcraft, then
+- Personal duel clip restored (only in run/mtgcraft and the ATM9 instance's mtgcraft folder, never in the jar).
+- Starter kits are 100-card Commander decks (random legend of the chosen colour pair).
+- Mana counter on player tags: orb + "untapped/total" mana sources (+floating); open mana on opponent tags.
+- Blocking feedback: planned blocks show at once (gold lines, "→ attacker" chips, "Your blocks: ..." banner).
+- Boosters tab lists every printable set (170, Alpha → newest incl. Spider-Man, Avatar, Aetherdrift, FF), oldest first.
+- 3D binder model (tools/make_gear_models.py).
+- Epic arena (client/ArenaRenderer): floating stage above the terrain (server/GauntletDuels.stageHeight), forced
+  seating around the ring, players fly + are locked to their podium, mobs no-gravity; dark rune floor texture,
+  barrier wall, dark fog, podiums sized to the mob, flat card zones, creature holograms, deck/graveyard/commander.
+- 1v1 duels by default; shift+right-click the gauntlet in the air for group fights (config groupFights).
+- Settings screen from the Magic Table (server settings for host/ops, plus client: duel intro, arena view).
+- Dev harness: `./gradlew runClient -PdevDuel -PdevWorld=DevArena -PdevArena` runs in single-player on a copied
+  save and writes duel_*.png / arena_*.png to run/screenshots.
+- Release jar built and copied to the ATM9 instance mods folder.
+
+## Session 5b: invites and group battles
+- Right-click a player with the Duel Gauntlet: if that player is starting a mob duel, you join it. Otherwise they get a friendly-duel challenge with clickable [Accept]/[Decline] that lasts 60 s. In a friendly duel nobody dies and the winner is announced.
+- Mob challenges: friends within 8 blocks who hold a gauntlet and have a ready deck get a clickable [Join] and 10 s to use it. The duel starts early once all of them have joined. If no friends are nearby, it starts right away.
+- Only friends still within 16 blocks of the challenger at the start get pulled onto the stage and locked in.
+- The gauntlet's group/1v1 toggle now only controls whether extra mobs join.
+- Command: `/mtgduel accept|decline|join <player>` (`GauntletDuels.commands`). Code: `GauntletDuels` Lobby, INVITES, startPvp.

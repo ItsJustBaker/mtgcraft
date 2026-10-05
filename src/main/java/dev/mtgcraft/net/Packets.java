@@ -42,15 +42,19 @@ public final class Packets {
         }
     }
 
-    /** Tells a client that a duel it's seated in is starting; its traffic uses {@code session}. */
-    public record DuelStart(int session, BlockPos table) {
+    /**
+     * Tells a client that a duel it's seated in is starting; its traffic uses {@code session}. {@code gauntlet} is
+     * true for a Duel Gauntlet fight (no table to go back to afterwards).
+     */
+    public record DuelStart(int session, BlockPos table, boolean gauntlet) {
         public void write(FriendlyByteBuf buf) {
             buf.writeVarInt(session);
             buf.writeBlockPos(table);
+            buf.writeBoolean(gauntlet);
         }
 
         public static DuelStart read(FriendlyByteBuf buf) {
-            return new DuelStart(buf.readVarInt(), buf.readBlockPos());
+            return new DuelStart(buf.readVarInt(), buf.readBlockPos(), buf.readBoolean());
         }
 
         public void handle(Supplier<NetworkEvent.Context> ctx) {
@@ -201,6 +205,63 @@ public final class Packets {
             if (stack.getItem() instanceof dev.mtgcraft.item.UniversalDeckBoxItem) {
                 dev.mtgcraft.item.UniversalDeckBoxItem.set(stack, choice, label);
             }
+        }
+    }
+
+    // ------------------------------------------------------------------ settings
+
+    /** One editable server setting: key, label, current value, the values it cycles through. */
+    public record Setting(String key, String label, String value, List<String> options) {}
+
+    public record SettingsRequest() {
+        public void write(FriendlyByteBuf buf) { }
+        public static SettingsRequest read(FriendlyByteBuf buf) { return new SettingsRequest(); }
+
+        public void handle(Supplier<NetworkEvent.Context> ctx) {
+            ServerPlayer p = ctx.get().getSender();
+            if (p != null) dev.mtgcraft.server.ServerSettings.send(p);
+        }
+    }
+
+    public record SettingsSet(String key, String value) {
+        public void write(FriendlyByteBuf buf) { buf.writeUtf(key); buf.writeUtf(value); }
+        public static SettingsSet read(FriendlyByteBuf buf) { return new SettingsSet(buf.readUtf(), buf.readUtf()); }
+
+        public void handle(Supplier<NetworkEvent.Context> ctx) {
+            ServerPlayer p = ctx.get().getSender();
+            if (p != null) dev.mtgcraft.server.ServerSettings.set(p, key, value);
+        }
+    }
+
+    public record SettingsState(boolean canEdit, List<Setting> settings) {
+        public void write(FriendlyByteBuf buf) {
+            buf.writeBoolean(canEdit);
+            buf.writeVarInt(settings.size());
+            for (Setting s : settings) {
+                buf.writeUtf(s.key());
+                buf.writeUtf(s.label());
+                buf.writeUtf(s.value());
+                buf.writeVarInt(s.options().size());
+                for (String o : s.options()) buf.writeUtf(o);
+            }
+        }
+
+        public static SettingsState read(FriendlyByteBuf buf) {
+            boolean canEdit = buf.readBoolean();
+            int n = buf.readVarInt();
+            List<Setting> out = new ArrayList<>();
+            for (int i = 0; i < n; i++) {
+                String key = buf.readUtf(), label = buf.readUtf(), value = buf.readUtf();
+                int m = buf.readVarInt();
+                List<String> opts = new ArrayList<>();
+                for (int j = 0; j < m; j++) opts.add(buf.readUtf());
+                out.add(new Setting(key, label, value, opts));
+            }
+            return new SettingsState(canEdit, out);
+        }
+
+        public void handle(Supplier<NetworkEvent.Context> ctx) {
+            DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> dev.mtgcraft.client.SettingsScreen.onState(this));
         }
     }
 

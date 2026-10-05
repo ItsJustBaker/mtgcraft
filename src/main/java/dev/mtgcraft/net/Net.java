@@ -53,6 +53,15 @@ public final class Net {
         CHANNEL.messageBuilder(Packets.SetUniversalDeck.class, id++, NetworkDirection.PLAY_TO_SERVER)
                 .encoder(Packets.SetUniversalDeck::write).decoder(Packets.SetUniversalDeck::read)
                 .consumerMainThread(Packets.SetUniversalDeck::handle).add();
+        CHANNEL.messageBuilder(Packets.SettingsRequest.class, id++, NetworkDirection.PLAY_TO_SERVER)
+                .encoder(Packets.SettingsRequest::write).decoder(Packets.SettingsRequest::read)
+                .consumerMainThread(Packets.SettingsRequest::handle).add();
+        CHANNEL.messageBuilder(Packets.SettingsSet.class, id++, NetworkDirection.PLAY_TO_SERVER)
+                .encoder(Packets.SettingsSet::write).decoder(Packets.SettingsSet::read)
+                .consumerMainThread(Packets.SettingsSet::handle).add();
+        CHANNEL.messageBuilder(Packets.SettingsState.class, id++, NetworkDirection.PLAY_TO_CLIENT)
+                .encoder(Packets.SettingsState::write).decoder(Packets.SettingsState::read)
+                .consumerMainThread(Packets.SettingsState::handle).add();
         CHANNEL.messageBuilder(Packets.EngineReady.class, id++, NetworkDirection.PLAY_TO_SERVER)
                 .encoder(Packets.EngineReady::write).decoder(Packets.EngineReady::read)
                 .consumerMainThread(Packets.EngineReady::handle).add();

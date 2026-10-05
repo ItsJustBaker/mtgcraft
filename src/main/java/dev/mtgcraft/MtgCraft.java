@@ -78,10 +78,12 @@ public class MtgCraft {
             .icon(() -> dev.mtgcraft.item.PackItem.ofSet("NEO", 1))
             .withTabsBefore(TAB.getKey())
             .displayItems((params, output) -> {
-                String[] sets = dev.mtgcraft.engine.Packs.SET_POOL;
-                for (int i = sets.length - 1; i >= 0; i--) {
-                    output.accept(dev.mtgcraft.item.PackItem.ofSet(sets[i], 1));
-                    output.accept(dev.mtgcraft.item.BoxItem.ofSet(sets[i]));
+                // Every printable set, oldest to newest, once the card engine is loaded (until then, a short list).
+                java.util.List<String> sets = dev.mtgcraft.engine.ForgeEngine.state() == dev.mtgcraft.engine.ForgeEngine.State.READY
+                        ? dev.mtgcraft.engine.Packs.boosterSets() : java.util.List.of(dev.mtgcraft.engine.Packs.SET_POOL);
+                for (String set : sets) {
+                    output.accept(dev.mtgcraft.item.PackItem.ofSet(set, 1));
+                    output.accept(dev.mtgcraft.item.BoxItem.ofSet(set));
                 }
             })
             .build());
@@ -95,6 +97,8 @@ public class MtgCraft {
         dev.mtgcraft.net.Net.register();
         net.minecraftforge.fml.ModLoadingContext.get().registerConfig(
                 net.minecraftforge.fml.config.ModConfig.Type.COMMON, MtgConfig.SPEC);
+        net.minecraftforge.fml.ModLoadingContext.get().registerConfig(
+                net.minecraftforge.fml.config.ModConfig.Type.CLIENT, MtgClientConfig.SPEC);
         bus.addListener(this::addToCreativeTab);
     }
 

@@ -51,6 +51,9 @@ public final class DuelGui extends NetworkGuiGame {
     /** Set if the game couldn't start (e.g. a deck file failed to load). */
     public volatile String failed;
 
+    /** Cards Card-Forge is showing for the current prompt (e.g. the cards being scried), or empty. */
+    public volatile List<CardView> revealed = List.of();
+
     private final ConcurrentLinkedDeque<ChoiceRequest> requests = new ConcurrentLinkedDeque<>();
 
     public DuelGui() {
@@ -216,6 +219,11 @@ public final class DuelGui extends NetworkGuiGame {
 
     @Override
     public <T> List<T> getChoices(String message, int min, int max, List<T> choices, List<T> selected, FSerializableFunction<T, String> display) {
+        if (min < 0 && max < 0) {
+            // Card-Forge's way of saying "just show these".
+            reveal(message, choices);
+            return new ArrayList<>();
+        }
         return pick("", message, min, max, choices, display, null);
     }
 
@@ -226,11 +234,11 @@ public final class DuelGui extends NetworkGuiGame {
         List<T> result = new ArrayList<>();
         if (destChoices != null) result.addAll(destChoices);
         int n = sourceChoices.size();
-        int minPick = Math.max(0, n - remainingObjectsMax);
-        int maxPick = Math.max(minPick, n - remainingObjectsMin);
-        if (remainingObjectsMin == 0 && remainingObjectsMax == 0) {
-            minPick = maxPick = n;
-        }
+        // "How many may stay behind": a negative bound means "any number" (e.g. scry: put any number on the bottom).
+        int remainMin = remainingObjectsMin < 0 ? 0 : remainingObjectsMin;
+        int remainMax = remainingObjectsMax < 0 ? n : remainingObjectsMax;
+        int minPick = Math.max(0, Math.min(n, n - remainMax));
+        int maxPick = Math.max(minPick, Math.min(n, n - remainMin));
         if (n <= 1 && minPick == n) {
             result.addAll(sourceChoices);
             return new OrderResult<>(result, false);
@@ -240,6 +248,11 @@ public final class DuelGui extends NetworkGuiGame {
         for (T t : sourceChoices) {
             labels.add(label(t, null));
             cards.add(cardOf(t));
+        }
+        if (minPick == n && new java.util.HashSet<>(labels).size() == 1) {
+            // Ordering identical things (two copies of the same trigger) changes nothing; don't ask.
+            result.addAll(sourceChoices);
+            return new OrderResult<>(result, false);
         }
         List<Integer> idx = ask(ChoiceRequest.order(title, top, labels, cards, minPick, maxPick, referenceCard));
         if (idx == null) {
@@ -341,11 +354,44 @@ public final class DuelGui extends NetworkGuiGame {
         return pick(title, title, min, max, new ArrayList<GameEntityView>(optionList), null, null);
     }
 
+    /**
+     * Moving cards to the top or bottom of a library (scry-like effects). The player clicks the cards to keep on top,
+     * first click = top card; the rest go to the bottom.
+     */
     @Override
     public List<CardView> manipulateCardList(String title, Iterable<CardView> cards, Iterable<CardView> manipulable,
                                              boolean toTop, boolean toBottom, boolean toAnywhere) {
-        List<CardView> out = new ArrayList<>();
-        cards.forEach(out::add);
+        List<CardView> all = new ArrayList<>();
+        cards.forEach(all::add);
+        List<CardView> moving = new ArrayList<>();
+        manipulable.forEach(moving::add);
+        if (moving.isEmpty() || (!toTop && !toBottom)) return all;
+        List<CardView> rest = new ArrayList<>(all);
+        rest.removeAll(moving);
+        List<String> labels = new ArrayList<>();
+        for (CardView c : moving) labels.add(c.getName());
+        List<CardView> top = new ArrayList<>(), bottom = new ArrayList<>();
+        if (moving.size() == 1 && toTop && toBottom) {
+            boolean keep = confirm(moving.get(0), "Put " + moving.get(0).getName() + " on top of your library?", true,
+                    List.of("Top", "Bottom"));
+            (keep ? top : bottom).addAll(moving);
+        } else if (toTop) {
+            String how = toBottom ? "Click the cards to keep on top (first click = top card). The rest go to the bottom."
+                    : "Click the cards in order: the first one you click goes on top.";
+            List<Integer> idx = ask(ChoiceRequest.order(title, how, labels, moving, toBottom ? 0 : moving.size(),
+                    moving.size(), null));
+            if (idx == null) return all;
+            for (int i : idx) top.add(moving.get(i));
+            for (CardView c : moving) if (!top.contains(c)) bottom.add(c);
+        } else {
+            List<Integer> idx = ask(ChoiceRequest.order(title, "Click the cards in order: the last one you click ends up at the very bottom.",
+                    labels, moving, moving.size(), moving.size(), null));
+            if (idx == null) return all;
+            for (int i : idx) bottom.add(moving.get(i));
+        }
+        List<CardView> out = new ArrayList<>(top);
+        out.addAll(rest);
+        out.addAll(bottom);
         return out;
     }
 
@@ -355,13 +401,12 @@ public final class DuelGui extends NetworkGuiGame {
     }
 
     /** Lethal damage to each blocker in order; anything left goes to the player (trample) or the last blocker. */
-    @Override
-    public Map<CardView, Integer> assignCombatDamage(CardView attacker, List<CardView> blockers, int damage,
-                                                     GameEntityView defender, boolean overrideOrder, boolean maySkip) {
-        Map<CardView, Integer> out = new HashMap<>();
+    private static Map<CardView, Integer> autoCombatDamage(CardView attacker, List<CardView> blockers, int damage,
+                                                           GameEntityView defender) {
+        Map<CardView, Integer> out = new LinkedHashMap<>();
         int left = damage;
         for (CardView b : blockers) {
-            int lethal = Math.max(0, Math.min(left, b.getLethalDamage()));
+            int lethal = Math.max(0, Math.min(left, lethal(attacker, b)));
             out.put(b, lethal);
             left -= lethal;
         }
@@ -376,25 +421,87 @@ public final class DuelGui extends NetworkGuiGame {
         return out;
     }
 
+    /** Damage that kills a blocker: 1 from a deathtouch source. */
+    private static int lethal(CardView source, CardView blocker) {
+        int lethal = Math.max(0, blocker.getLethalDamage());
+        boolean deathtouch = source != null && source.getCurrentState() != null && source.getCurrentState().hasDeathtouch();
+        return deathtouch ? Math.min(1, lethal) : lethal;
+    }
+
+    /**
+     * Splitting a creature's combat damage between its blockers (and, with trample, the player). Starts from the
+     * usual split (lethal to each blocker, the rest through) and lets the player move points around.
+     */
+    @Override
+    public Map<CardView, Integer> assignCombatDamage(CardView attacker, List<CardView> blockers, int damage,
+                                                     GameEntityView defender, boolean overrideOrder, boolean maySkip) {
+        Map<CardView, Integer> auto = autoCombatDamage(attacker, blockers, damage, defender);
+        List<String> labels = new ArrayList<>();
+        List<CardView> cards = new ArrayList<>();
+        List<Integer> initial = new ArrayList<>(), mins = new ArrayList<>(), lethal = new ArrayList<>();
+        List<String> notes = new ArrayList<>();
+        for (CardView b : blockers) {
+            labels.add(b.getName());
+            cards.add(b);
+            initial.add(auto.getOrDefault(b, 0));
+            mins.add(0);
+            int l = lethal(attacker, b);
+            lethal.add(l);
+            notes.add("dies at " + l);
+        }
+        boolean toDefender = defender != null;
+        if (toDefender) {
+            labels.add(defender instanceof PlayerView p ? p.getName() : label(defender, null));
+            cards.add(defender instanceof CardView c ? c : null);
+            initial.add(auto.getOrDefault(null, 0));
+            mins.add(0);
+            notes.add("tramples over");
+        }
+        int nBlockers = blockers.size();
+        java.util.function.Function<List<Integer>, String> check = v -> {
+            if (!toDefender || overrideOrder || v.get(nBlockers) == 0) return null;
+            for (int i = 0; i < nBlockers; i++) {
+                if (v.get(i) < lethal.get(i)) return "Give every blocker lethal damage before trampling over.";
+            }
+            return null;
+        };
+        String name = attacker == null ? "Your creature" : attacker.getName();
+        List<Integer> idx = ask(ChoiceRequest.distribute("Assign combat damage",
+                name + " deals " + damage + " damage. Use + and − to split it.", labels, cards, damage, mins, initial,
+                notes, check, attacker));
+        if (idx == null || idx.size() != labels.size()) return auto;
+        Map<CardView, Integer> out = new HashMap<>();
+        for (int i = 0; i < nBlockers; i++) if (idx.get(i) > 0) out.put(blockers.get(i), idx.get(i));
+        if (toDefender && idx.get(nBlockers) > 0) out.put(null, idx.get(nBlockers));
+        return out;
+    }
+
+    /** Dividing damage, counters or shields between several targets, all on one screen. */
     @Override
     public Map<Object, Integer> assignGenericAmount(CardView effectSource, Map<Object, Integer> target, int amount,
                                                     boolean atLeastOne, String amountLabel) {
-        Map<Object, Integer> out = new LinkedHashMap<>();
         List<Object> keys = new ArrayList<>(target.keySet());
-        int left = amount;
-        for (int i = 0; i < keys.size(); i++) {
+        Map<Object, Integer> out = new LinkedHashMap<>();
+        if (keys.isEmpty()) return out;
+        int min = atLeastOne ? 1 : 0;
+        List<String> labels = new ArrayList<>();
+        List<CardView> cards = new ArrayList<>();
+        List<Integer> mins = new ArrayList<>(), initial = new ArrayList<>();
+        // Start from an even spread; the first targets get any odd points.
+        int n = keys.size(), spare = Math.max(0, amount - min * n);
+        for (int i = 0; i < n; i++) {
             Object k = keys.get(i);
-            int stillNeeded = atLeastOne ? keys.size() - i - 1 : 0;
-            int value;
-            if (i == keys.size() - 1) {
-                value = left;
-            } else {
-                int min = atLeastOne ? 1 : 0;
-                value = askNumber(amountLabel + " to " + label(k, null) + " (" + left + " left)", min, left - stillNeeded, effectSource);
-            }
-            out.put(k, value);
-            left -= value;
+            labels.add(label(k, null));
+            cards.add(cardOf(k));
+            mins.add(min);
+            initial.add(min + spare / n + (i < spare % n ? 1 : 0));
         }
+        String what = amountLabel == null || amountLabel.isEmpty() ? "points" : amountLabel.toLowerCase();
+        List<Integer> v = keys.size() == 1 ? List.of(amount) : ask(ChoiceRequest.distribute(
+                "Divide " + amount + " " + what, "Use + and − to split " + amount + " " + what + " between them.",
+                labels, cards, amount, mins, initial, null, null, effectSource));
+        if (v == null || v.size() != keys.size()) v = initial;
+        for (int i = 0; i < keys.size(); i++) out.put(keys.get(i), v.get(i));
         return out;
     }
 
@@ -424,6 +531,12 @@ public final class DuelGui extends NetworkGuiGame {
         cancelEnabled = enable2;
     }
 
+    @Override public void showRevealedCards(Iterable<CardView> cards) {
+        List<CardView> list = new ArrayList<>();
+        if (cards != null) cards.forEach(list::add);
+        revealed = List.copyOf(list);
+    }
+    @Override public void hideRevealedCards() { revealed = List.of(); }
     @Override public void flashIncorrectAction() { flashTime = System.currentTimeMillis(); }
     @Override public void alertUser() { }
     @Override public void openView(TrackableCollection<PlayerView> myPlayers) { viewOpen = true; }

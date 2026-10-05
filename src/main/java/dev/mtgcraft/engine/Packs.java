@@ -73,13 +73,25 @@ public final class Packs {
 
     // ------------------------------------------------------------------ set boosters
 
+    /**
+     * Every set Card-Forge can print a booster for (expansions, core sets, Masters sets and Universes Beyond
+     * crossovers like Spider-Man, Avatar or Final Fantasy), oldest first. Digital-only sets are left out.
+     */
     public static synchronized List<String> boosterSets() {
         if (validSets == null) {
-            List<String> ok = new ArrayList<>();
-            for (String code : SET_POOL) {
-                CardEdition ed = FModel.getMagicDb().getEditions().get(code);
-                if (ed != null && ed.getRandomBoosterKind() != null) ok.add(code);
+            List<CardEdition> eds = new ArrayList<>();
+            for (CardEdition ed : FModel.getMagicDb().getEditions()) {
+                if (ed.getType() == CardEdition.Type.ONLINE || ed.getType() == CardEdition.Type.CUSTOM_SET) continue;
+                try {
+                    if (ed.getRandomBoosterKind() == null) continue;
+                } catch (RuntimeException broken) {
+                    continue;
+                }
+                eds.add(ed);
             }
+            eds.sort(java.util.Comparator.comparing(CardEdition::getDate).thenComparing(CardEdition::getCode));
+            List<String> ok = new ArrayList<>();
+            for (CardEdition ed : eds) ok.add(ed.getCode());
             validSets = ok;
         }
         return validSets;

@@ -23,10 +23,17 @@ import net.minecraft.world.item.ItemStack;
 import java.util.List;
 import java.util.Map;
 
-/** The one-time starter: pick a two-colour deck, get it in a Deck Box with a Binder, a Duel Gauntlet and packs. */
+/**
+ * The one-time starter: pick a colour pair and get a 100-card Commander deck (a legendary commander of those colours
+ * with a deck built around it) in a Deck Box, plus a Binder, a Duel Gauntlet and packs.
+ */
 public final class StarterKits {
-    public static final String[] NAMES = {"Selesnya Pack (white/green)", "Azorius Skies (white/blue)",
-            "Dimir Shadows (blue/black)", "Rakdos Fire (black/red)", "Gruul Beasts (red/green)"};
+    public static final String[] NAMES = {"Selesnya Commander (white/green)", "Azorius Commander (white/blue)",
+            "Dimir Commander (blue/black)", "Rakdos Commander (black/red)", "Gruul Commander (red/green)"};
+    private static final byte[] MASKS = {
+            forge.card.MagicColor.WHITE | forge.card.MagicColor.GREEN, forge.card.MagicColor.WHITE | forge.card.MagicColor.BLUE,
+            forge.card.MagicColor.BLUE | forge.card.MagicColor.BLACK, forge.card.MagicColor.BLACK | forge.card.MagicColor.RED,
+            forge.card.MagicColor.RED | forge.card.MagicColor.GREEN};
     private static final String[][] COLORS = {{"White", "Green"}, {"White", "Blue"}, {"Blue", "Black"},
             {"Black", "Red"}, {"Red", "Green"}};
     private static final String TAG = "mtgcraft_starter";
@@ -53,16 +60,43 @@ public final class StarterKits {
         persisted(p).putBoolean(TAG, true);
         var server = p.getServer();
         ForgeEngine.runOnUi(() -> {
-            Deck deck = DeckgenUtil.buildColorDeck(List.of(COLORS[choice]),
-                    FModel.getFormats().getModern().getFilterPrinted(), false);
-            server.execute(() -> give(p, deck, NAMES[choice]));
+            PaperCard commander = randomCommander(MASKS[choice]);
+            Deck deck = commander == null ? null
+                    : DeckgenUtil.generateRandomCommanderDeck(commander, forge.deck.DeckFormat.Commander, false, false);
+            if (deck == null) {
+                deck = DeckgenUtil.buildColorDeck(List.of(COLORS[choice]),
+                        FModel.getFormats().getModern().getFilterPrinted(), false);
+            }
+            Deck built = deck;
+            String name = commander == null ? NAMES[choice] : commander.getName() + " (" + NAMES[choice].replace(" Commander", "") + ")";
+            server.execute(() -> give(p, built, name));
         });
+    }
+
+    /** A random legendary creature whose colours are exactly the pair (Modern-legal printings first). */
+    private static PaperCard randomCommander(byte mask) {
+        java.util.List<PaperCard> picks = new java.util.ArrayList<>();
+        var modern = FModel.getFormats().getModern().getFilterPrinted();
+        for (PaperCard pc : FModel.getMagicDb().getCommonCards().getUniqueCards()) {
+            var r = pc.getRules();
+            if (!r.canBeCommander() || !r.getType().isCreature() || pc.getName().startsWith("A-")) continue;
+            if (r.getColor().getColor() != mask || !modern.test(pc)) continue;
+            picks.add(pc);
+        }
+        return picks.isEmpty() ? null : picks.get(new java.util.Random().nextInt(picks.size()));
     }
 
     private static void give(ServerPlayer p, Deck deck, String name) {
         ItemStack box = new ItemStack(MtgCraft.DECK_BOX.get());
         for (Map.Entry<PaperCard, Integer> e : deck.getMain()) {
             CardBag.add(box, Cards.key(e.getKey()), false, e.getValue());
+        }
+        if (deck.has(forge.deck.DeckSection.Commander)) {
+            for (Map.Entry<PaperCard, Integer> e : deck.get(forge.deck.DeckSection.Commander)) {
+                String key = Cards.key(e.getKey());
+                CardBag.add(box, key, false, e.getValue());
+                dev.mtgcraft.item.DeckBoxItem.setCommander(box, key);
+            }
         }
         give(p, box);
         give(p, new ItemStack(MtgCraft.BINDER.get()));

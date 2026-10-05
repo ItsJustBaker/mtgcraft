@@ -13,6 +13,7 @@ public final class MtgConfig {
     public static final ForgeConfigSpec.DoubleValue PACK_DROP_CHANCE;
     public static final ForgeConfigSpec.DoubleValue SET_PACK_DROP_CHANCE;
     public static final ForgeConfigSpec.BooleanValue STARTER_KIT;
+    public static final ForgeConfigSpec.BooleanValue GROUP_FIGHTS;
 
     static {
         ForgeConfigSpec.Builder b = new ForgeConfigSpec.Builder();
@@ -23,6 +24,9 @@ public final class MtgConfig {
         DUEL_MODE = b.comment("Rules for Duel Gauntlet challenges. COMMANDER: casual Commander (40 life, commanders, any deck size).",
                         "CLASSIC: 20 life, no commanders. Bosses always fight as the Archenemy.")
                 .defineEnum("duelMode", DuelMode.COMMANDER);
+        GROUP_FIGHTS = b.comment("Default Duel Gauntlet mode. false: 1v1 duels. true: nearby mobs and friends join.",
+                        "Each gauntlet can be switched with shift + right-click in the air.")
+                .define("groupFights", false);
         b.pop();
         b.push("drops");
         PACK_DROP_CHANCE = b.comment("Chance a hostile mob killed by a player drops a themed booster pack.")

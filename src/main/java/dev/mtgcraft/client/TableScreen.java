@@ -102,6 +102,7 @@ public class TableScreen extends Screen {
         g.pose().translate(0, (1 - ease) * 16, 0);
         Theme.panel(g, px, py, pw, ph);
         g.drawCenteredString(font, Component.literal("Magic Table").withStyle(st -> st.withBold(true)), width / 2, py + 8, Theme.GOLD);
+        Theme.button(g, font, "Settings", px + pw - 72, py + 5, 66, 13, mx, my, true, false);
 
         if (ForgeEngine.state() != ForgeEngine.State.READY || state == null) {
             String msg = ForgeEngine.state() == ForgeEngine.State.FAILED ? "Card engine failed to load: " + ForgeEngine.failure()
@@ -202,6 +203,11 @@ public class TableScreen extends Screen {
 
     @Override
     public boolean mouseClicked(double mx, double my, int button) {
+        if (in(mx, my, px + pw - 72, py + 5, 66, 13)) {
+            minecraft.setScreen(new SettingsScreen(this));
+            Theme.click();
+            return true;
+        }
         if (state == null || ForgeEngine.state() != ForgeEngine.State.READY) return super.mouseClicked(mx, my, button);
         int by = py + ph - 26;
         if (in(mx, my, width / 2 + 22, by, 82, 20)) {
