@@ -15,6 +15,8 @@ public final class Theme {
     public static final ResourceLocation FELT = new ResourceLocation(MtgCraft.MODID, "textures/gui/felt.png");
     public static final ResourceLocation CARD_BACK = new ResourceLocation(MtgCraft.MODID, "textures/gui/card_back.png");
 
+    /** Developer harness on (-Dmtgcraft.devDuel): log sounds, since test machines have no audio. */
+    private static final boolean DEV = Boolean.getBoolean("mtgcraft.devDuel");
     public static final int TEXT = 0xFFF2EEE3;
     public static final int MUTED = 0xFFA9B5A8;
     public static final int GOLD = 0xFFE0B65A;
@@ -126,6 +128,7 @@ public final class Theme {
     }
 
     public static void play(SoundEvent sound, float pitch, float volume) {
+        if (DEV) System.out.println("[MTGCraft dev] sound " + sound.getLocation());
         Minecraft.getInstance().getSoundManager().play(SimpleSoundInstance.forUI(sound, pitch, volume));
     }
 }

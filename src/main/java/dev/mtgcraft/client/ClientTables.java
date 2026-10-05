@@ -100,6 +100,7 @@ public final class ClientTables {
         Minecraft mc = Minecraft.getInstance();
         if (!sentReady && mc.getConnection() != null && ForgeEngine.state() == ForgeEngine.State.READY) {
             Net.toServer(new Packets.EngineReady());
+            sendAutoPass();
             sentReady = true;
             // The Boosters tab can now list every set: rebuild it.
             if (mc.player != null && mc.level != null) {
@@ -107,6 +108,18 @@ public final class ClientTables {
                         mc.player.connection.enabledFeatures(), mc.player.canUseGameMasterBlocks(), mc.level.registryAccess()));
             }
         }
+    }
+
+    /** Tells the server whether to auto-pass for this player (their client setting). */
+    public static void sendAutoPass() {
+        if (Minecraft.getInstance().getConnection() == null) return;
+        boolean on;
+        try {
+            on = dev.mtgcraft.MtgClientConfig.AUTO_PASS.get();
+        } catch (IllegalStateException notLoaded) {
+            on = true;
+        }
+        Net.toServer(new Packets.AutoPassPref(on));
     }
 
     public static void loggedOut() {

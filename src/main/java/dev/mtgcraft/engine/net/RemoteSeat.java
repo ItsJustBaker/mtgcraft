@@ -31,6 +31,8 @@ public final class RemoteSeat {
     private final Tunnel tunnel;
     public final RemoteClient client;
     public final RemoteClientGuiGame gui;
+    /** The Minecraft player in this seat (for their auto-pass setting); set by whoever opens the seat. */
+    public volatile java.util.UUID player;
 
     public RemoteSeat(String playerName, Wire wire) {
         tunnel = new Tunnel("seat", new Handler(), wire);
@@ -42,7 +44,7 @@ public final class RemoteSeat {
             public void showPromptMessage(forge.game.player.PlayerView playerView, String message, forge.game.card.CardView card) {
                 super.showPromptMessage(playerView, message, card);
                 // Nothing to do? Pass on the player's behalf instead of making them press OK.
-                if (getGameController() instanceof forge.player.PlayerControllerHuman human) AutoPass.onPrompt(human);
+                if (getGameController() instanceof forge.player.PlayerControllerHuman human) AutoPass.onPrompt(human, player);
             }
         };
     }

@@ -33,7 +33,7 @@ public class SettingsScreen extends Screen {
     protected void init() {
         Net.toServer(new Packets.SettingsRequest());
         pw = Math.min(width - 20, 320);
-        ph = Math.min(height - 16, 250);
+        ph = Math.min(height - 8, 300);
         px = (width - pw) / 2;
         py = (height - ph) / 2;
     }
@@ -58,7 +58,7 @@ public class SettingsScreen extends Screen {
         };
     }
 
-    private int rowY(int i) { return py + 34 + i * 20; }
+    private int rowY(int i) { return py + 34 + i * 18; }
 
     @Override
     public void render(GuiGraphics g, int mx, int my, float partialTick) {
@@ -82,11 +82,14 @@ public class SettingsScreen extends Screen {
             yy += 8;
         }
         g.drawString(font, "Just you", labelX, yy + 2, Theme.MUTED);
-        int c0 = yy + 14, c1 = c0 + 20;
+        int c0 = yy + 14, c1 = c0 + 18, c2 = c1 + 18;
         g.drawString(font, "Duel intro", labelX, c0 + 4, Theme.TEXT);
         Theme.button(g, font, MtgClientConfig.DUEL_INTRO.get() ? "On" : "Off", btnX, c0, btnW, 15, mx, my, true, false);
         g.drawString(font, "Battlefield view", labelX, c1 + 4, Theme.TEXT);
         Theme.button(g, font, MtgClientConfig.ARENA_VIEW.get() ? "3D arena" : "2D screen", btnX, c1, btnW, 15, mx, my, true, false);
+        g.drawString(font, "Auto-pass", labelX, c2 + 4, Theme.TEXT);
+        Theme.button(g, font, MtgClientConfig.AUTO_PASS.get() ? "On (skip when nothing to play)" : "Off (always stop)",
+                btnX, c2, btnW, 15, mx, my, true, false);
         Theme.button(g, font, "Done", width / 2 - 40, py + ph - 24, 80, 18, mx, my, true, true);
     }
 
@@ -109,7 +112,13 @@ public class SettingsScreen extends Screen {
         }
         int n = Math.max(1, server.size());
         int yy = rowY(n) + 6 + (state != null && !state.canEdit() ? 8 : 0);
-        int c0 = yy + 14, c1 = c0 + 20;
+        int c0 = yy + 14, c1 = c0 + 18, c2 = c1 + 18;
+        if (in(mx, my, btnX, c2, btnW, 15)) {
+            MtgClientConfig.AUTO_PASS.set(!MtgClientConfig.AUTO_PASS.get());
+            ClientTables.sendAutoPass();
+            Theme.click();
+            return true;
+        }
         if (in(mx, my, btnX, c0, btnW, 15)) {
             MtgClientConfig.DUEL_INTRO.set(!MtgClientConfig.DUEL_INTRO.get());
             Theme.click();

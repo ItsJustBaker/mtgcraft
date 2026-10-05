@@ -296,7 +296,6 @@ public class DuelScreen extends Screen {
         resolvePendingTarget();
         updateQueuedAttack(view, me);
         handSound(me);
-        alertSounds(view, me, req);
 
         drawMiddleLine(g);
         if (!arena) drawPiles(g, me, opp);
@@ -561,7 +560,7 @@ public class DuelScreen extends Screen {
                 revealed = true;
             }
         }
-        if (duel.isSelecting()) {
+        if (picking()) {
             for (PlayerView p : view.getPlayers()) {
                 for (ZoneType z : new ZoneType[]{ZoneType.Graveyard, ZoneType.Exile, ZoneType.Command, ZoneType.Library, ZoneType.Hand}) {
                     for (CardView c : cards(p.getCards(z))) {
@@ -698,35 +697,6 @@ public class DuelScreen extends Screen {
         return new float[]{p.x, p.y + cardH * 0.4f};
     }
 
-    private int lastTurnPlayer = Integer.MIN_VALUE, blockAlertTurn = -1;
-    private ChoiceRequest alertedRequest;
-
-    /**
-     * A chime when your turn starts, a soft close when it ends, a bell when you have blockers to declare, and a
-     * ping when the game asks you a question: the game waits for you, so you hear when it does.
-     */
-    private void alertSounds(GameView view, PlayerView me, ChoiceRequest req) {
-        PlayerView turn = view.getPlayerTurn();
-        int now = turn == null ? -1 : turn.getId();
-        if (now != lastTurnPlayer) {
-            if (lastTurnPlayer != Integer.MIN_VALUE) {
-                if (now == me.getId()) Theme.play(SoundEvents.AMETHYST_BLOCK_CHIME, 1.0f, 1.0f);
-                else if (lastTurnPlayer == me.getId()) Theme.play(SoundEvents.BOOK_PUT, 0.7f, 0.9f);
-            }
-            lastTurnPlayer = now;
-        }
-        boolean priority = duel.prompt != null && duel.prompt.startsWith("Priority");
-        if (view.getPhase() == PhaseType.COMBAT_DECLARE_BLOCKERS && now != me.getId() && !priority && duel.okEnabled
-                && defending(view, me) && blockAlertTurn != view.getTurn()) {
-            blockAlertTurn = view.getTurn();
-            Theme.play(SoundEvents.BELL_BLOCK, 1.3f, 0.8f);
-        }
-        if (req != null && req != alertedRequest) {
-            alertedRequest = req;
-            Theme.play(SoundEvents.NOTE_BLOCK_PLING.value(), 1.6f, 0.5f);
-        }
-    }
-
     private void handSound(PlayerView me) {
         int size = me.getZoneSize(ZoneType.Hand);
         if (lastHandSize >= 0 && size > lastHandSize) {
@@ -816,7 +786,7 @@ public class DuelScreen extends Screen {
     private int frameMouseX, frameMouseY;
 
     private boolean anySelectable(PlayerView p, ZoneType zone) {
-        if (!duel.isSelecting()) return false;
+        if (!picking()) return false;
         for (CardView c : cards(p.getCards(zone))) if (duel.isSelectable(c)) return true;
         return false;
     }
@@ -860,6 +830,11 @@ public class DuelScreen extends Screen {
             g.drawString(font, Theme.ellipsize(font, trayLabel, (int) ((w - 10) / 0.75f)), 0, 0, Theme.GOLD, false);
             g.pose().popPose();
         }
+    }
+
+    /** The game is waiting for a pick (max 0 means Card-Forge is only highlighting playable cards). */
+    private boolean picking() {
+        return duel.isSelecting() && duel.getSelectionMax() > 0;
     }
 
     private boolean hasTray() {
@@ -1464,7 +1439,7 @@ public class DuelScreen extends Screen {
         boolean arenaToggle = ArenaRenderer.has(table);
         // Creative mode gets a cheat button that wins the duel on the spot.
         boolean creative = minecraft.player != null && minecraft.player.isCreative() && !duel.isOver();
-        int n = 2 + (arenaToggle ? 1 : 0) + (creative ? 1 : 0);
+        int n = 3 + (arenaToggle ? 1 : 0) + (creative ? 1 : 0);
         int bw = (w - (n - 1) * 3) / n;
         int bx = x;
         toolButton(g, "Log", bx, bw, mx, my, showLog, () -> showLog = !showLog);
@@ -1475,14 +1450,31 @@ public class DuelScreen extends Screen {
         });
         bx += bw + 3;
         if (arenaToggle) {
-            toolButton(g, creative ? (arenaView ? "3D" : "2D") : arenaView ? "3D view" : "2D view", bx, bw, mx, my, arenaView, this::toggleView);
+            toolButton(g, arenaView ? "3D" : "2D", bx, bw, mx, my, arenaView, this::toggleView);
             bx += bw + 3;
         }
+        // Auto-pass on/off (also in Settings): gold when it's on.
+        boolean auto = autoPassOn();
+        toolButton(g, "Auto", bx, bw, mx, my, auto, () -> {
+            dev.mtgcraft.MtgClientConfig.AUTO_PASS.set(!autoPassOn());
+            ClientTables.sendAutoPass();
+            info(autoPassOn() ? "Auto-pass on: the game passes for you when you have nothing to play."
+                    : "Auto-pass off: the game stops every time you could act.");
+        });
+        bx += bw + 3;
         if (creative) {
             toolButton(g, "Win", bx, bw, mx, my, false, () -> {
                 dev.mtgcraft.net.Net.toServer(new dev.mtgcraft.net.Packets.CheatWin());
-                toast("Creative: winning the duel (works when it's your priority).");
+                info("Creative: winning the duel (works when it's your priority).");
             });
+        }
+    }
+
+    private static boolean autoPassOn() {
+        try {
+            return dev.mtgcraft.MtgClientConfig.AUTO_PASS.get();
+        } catch (IllegalStateException notLoaded) {
+            return true;
         }
     }
 
@@ -1656,8 +1648,8 @@ public class DuelScreen extends Screen {
             return new String[]{"Pay the cost", cost + "\nClick lands to tap them" + (duel.okEnabled ? ", or press " + ok + " to pay automatically." : ".")
                     + (duel.cancelEnabled ? " " + duel.cancelLabel + " to stop casting." : "")};
         }
-        if (duel.isSelecting() && hasTray()) return new String[]{"Choose", raw + "\nThe cards you can pick are in the middle of the board."};
-        if (duel.isSelecting()) return new String[]{"Choose", raw + "\nGlowing cards can be picked."};
+        if (picking() && hasTray()) return new String[]{"Choose", raw + "\nThe cards you can pick are in the middle of the board."};
+        if (picking()) return new String[]{"Choose", raw + "\nGlowing cards can be picked."};
         return new String[]{"", raw};
     }
 
@@ -2589,6 +2581,13 @@ public class DuelScreen extends Screen {
         toastText = text;
         toastUntil = System.currentTimeMillis() + 3500;
         Theme.play(SoundEvents.VILLAGER_NO, 1.2f, 0.5f);
+    }
+
+    /** Like toast, for news rather than a refusal (no "no" sound). */
+    private void info(String text) {
+        toastText = text;
+        toastUntil = System.currentTimeMillis() + 3000;
+        Theme.click();
     }
 
     private void drawToast(GuiGraphics g) {

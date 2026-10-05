@@ -65,6 +65,9 @@ public final class Net {
         CHANNEL.messageBuilder(Packets.EngineReady.class, id++, NetworkDirection.PLAY_TO_SERVER)
                 .encoder(Packets.EngineReady::write).decoder(Packets.EngineReady::read)
                 .consumerMainThread(Packets.EngineReady::handle).add();
+        CHANNEL.messageBuilder(Packets.AutoPassPref.class, id++, NetworkDirection.PLAY_TO_SERVER)
+                .encoder(Packets.AutoPassPref::write).decoder(Packets.AutoPassPref::read)
+                .consumerMainThread(Packets.AutoPassPref::handle).add();
         CHANNEL.messageBuilder(Packets.CheatWin.class, id++, NetworkDirection.PLAY_TO_SERVER)
                 .encoder(Packets.CheatWin::write).decoder(Packets.CheatWin::read)
                 .consumerMainThread(Packets.CheatWin::handle).add();

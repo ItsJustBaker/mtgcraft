@@ -158,6 +158,17 @@ public final class Packets {
 
     // ------------------------------------------------------------------ popups
 
+    /** A player's auto-pass setting (on: pass for them when they have nothing to play). */
+    public record AutoPassPref(boolean on) {
+        public void write(FriendlyByteBuf buf) { buf.writeBoolean(on); }
+        public static AutoPassPref read(FriendlyByteBuf buf) { return new AutoPassPref(buf.readBoolean()); }
+
+        public void handle(Supplier<NetworkEvent.Context> ctx) {
+            ServerPlayer p = ctx.get().getSender();
+            if (p != null) dev.mtgcraft.engine.net.AutoPass.setEnabled(p.getUUID(), on);
+        }
+    }
+
     /** Creative mode only: win the duel you're in right now. */
     public record CheatWin() {
         public void write(FriendlyByteBuf buf) {}

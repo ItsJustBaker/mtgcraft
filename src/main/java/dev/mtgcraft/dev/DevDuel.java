@@ -48,6 +48,21 @@ public final class DevDuel {
             p.getInventory().add(box);
             var level = p.serverLevel();
             var at = p.blockPosition().relative(p.getDirection(), 4);
+            if (Boolean.getBoolean("mtgcraft.devHill")) {
+                // A dirt hill beside the duel, to check the stage rises above terrain.
+                var base = p.blockPosition().relative(p.getDirection().getClockWise(), 6);
+                for (int dx = -3; dx <= 3; dx++) for (int dz = -3; dz <= 3; dz++) for (int dy = 0; dy < 12 - Math.abs(dx) - Math.abs(dz); dy++) {
+                    level.setBlockAndUpdate(base.offset(dx, dy, dz), net.minecraft.world.level.block.Blocks.DIRT.defaultBlockState());
+                }
+            }
+            String devMob = System.getProperty("mtgcraft.devMob");
+            if (devMob != null && !devMob.isEmpty()) {
+                // -Dmtgcraft.devMob=minecraft:ender_dragon (or any mob id): duel that instead of the jockey.
+                var type = net.minecraftforge.registries.ForgeRegistries.ENTITY_TYPES.getValue(new net.minecraft.resources.ResourceLocation(devMob));
+                var e = type == null ? null : type.spawn(level, p.blockPosition().relative(p.getDirection(), 14).above(4), MobSpawnType.COMMAND);
+                if (e instanceof Mob mob) GauntletDuels.challenge(p, mob);
+                return;
+            }
             Mob spider = EntityType.SPIDER.spawn(level, at, MobSpawnType.COMMAND);
             Mob skeleton = EntityType.SKELETON.spawn(level, at, MobSpawnType.COMMAND);
             if (spider == null || skeleton == null) return;

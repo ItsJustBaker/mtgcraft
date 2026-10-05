@@ -61,6 +61,8 @@ public final class MobThemes {
 
     public static Tier tier(Entity e) {
         if (isBoss(e)) return Tier.BOSS;
+        Tier marked = marked(e);
+        if (marked != null) return marked;
         String id = id(e.getType());
         if (has(id, "ghast", "blaze", "enderman", "witch", "piglin_brute", "evoker", "ravager", "guardian",
                 "wither_skeleton", "hoglin", "zoglin", "vindicator", "shulker", "golem", "illusioner", "breeze")) {
@@ -70,6 +72,32 @@ public final class MobThemes {
         float hp = e instanceof net.minecraft.world.entity.LivingEntity l ? l.getMaxHealth() : 20;
         if (hp >= 40) return Tier.TOUGH;
         return e instanceof Enemy || hp > 30 ? Tier.COMMON : Tier.CRITTER;
+    }
+
+    /**
+     * Ordinary mobs that other mods promoted: Apotheosis bosses and elites, Champions, Infernal Mobs and similar keep a
+     * marker in the mob's saved data or its tags. A "boss" marker makes a boss; "elite", "champion", "miniboss" or
+     * "infernal" make it tough. Null when there's no marker (its max health still counts, see tier()).
+     */
+    private static Tier marked(Entity e) {
+        Tier found = null;
+        java.util.List<String> keys = new java.util.ArrayList<>(e.getTags());
+        net.minecraft.nbt.CompoundTag data = e.getPersistentData();
+        for (String k : data.getAllKeys()) {
+            net.minecraft.nbt.Tag t = data.get(k);
+            // A numeric flag that's 0 means "no"; anything else counts as set.
+            if (t instanceof net.minecraft.nbt.NumericTag n && n.getAsInt() == 0) continue;
+            keys.add(k);
+        }
+        for (String k : keys) {
+            String l = k.toLowerCase(java.util.Locale.ROOT);
+            if (has(l, "miniboss", "mini_boss", "elite", "champion", "infernal")) {
+                if (found == null) found = Tier.TOUGH;
+            } else if (l.contains("boss")) {
+                return Tier.BOSS;
+            }
+        }
+        return found;
     }
 
     /** A mob's starting life in a quick duel (critters and common mobs); 0 means the format's usual life. */
@@ -88,6 +116,7 @@ public final class MobThemes {
             "barako", "cornelia", "wither_storm", "dragon", "_boss", "boss_", "titan", "colossus", "overlord"};
 
     public static boolean isBoss(Entity e) {
+        if (marked(e) == Tier.BOSS) return true;
         String id = id(e.getType());
         if (has(id, "wither_skeleton", "dragon_fly", "dragonfly", "baby_dragon")) return false;
         if (e.getType().is(Tags.EntityTypes.BOSSES) || has(id, "ender_dragon", "wither", "warden", "elder_guardian")) return true;
