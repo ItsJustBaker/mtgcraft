@@ -123,12 +123,15 @@ public final class ClientTables {
     public static void sendAutoPass() {
         if (Minecraft.getInstance().getConnection() == null) return;
         boolean on;
+        int skips;
         try {
             on = dev.mtgcraft.MtgClientConfig.AUTO_PASS.get();
+            skips = dev.mtgcraft.MtgClientConfig.SKIP_PHASES.get();
         } catch (IllegalStateException notLoaded) {
             on = true;
+            skips = 0;
         }
-        Net.toServer(new Packets.AutoPassPref(on));
+        Net.toServer(new Packets.AutoPassPref(on, skips));
     }
 
     public static void loggedOut() {

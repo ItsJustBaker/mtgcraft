@@ -62,12 +62,15 @@ public class MtgCraft {
                 output.accept(DECK_BOX.get());
                 output.accept(UNIVERSAL_DECK_BOX.get());
                 output.accept(DUEL_GAUNTLET.get());
+                output.accept(dev.mtgcraft.item.PackItem.ticket(false));
+                output.accept(dev.mtgcraft.item.PackItem.ticket(true));
                 for (dev.mtgcraft.engine.Packs.Theme t : dev.mtgcraft.engine.Packs.Theme.values()) {
+                    if (!t.available()) continue;
                     if (t.isBox()) output.accept(dev.mtgcraft.item.BoxItem.themed(t));
                     else output.accept(dev.mtgcraft.item.PackItem.themed(t, 1));
                 }
                 for (dev.mtgcraft.engine.Packs.Theme t : dev.mtgcraft.engine.Packs.Theme.values()) {
-                    if (!t.isBox()) output.accept(dev.mtgcraft.item.BoxItem.themed(t));
+                    if (t.available() && !t.isBox()) output.accept(dev.mtgcraft.item.BoxItem.themed(t));
                 }
             })
             .build());

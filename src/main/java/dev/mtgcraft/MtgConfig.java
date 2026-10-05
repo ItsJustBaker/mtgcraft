@@ -12,6 +12,10 @@ public final class MtgConfig {
     public static final ForgeConfigSpec.EnumValue<DuelMode> DUEL_MODE;
     public static final ForgeConfigSpec.DoubleValue PACK_DROP_CHANCE;
     public static final ForgeConfigSpec.DoubleValue SET_PACK_DROP_CHANCE;
+    public static final ForgeConfigSpec.DoubleValue DUEL_SET_PACK_CHANCE;
+    public static final ForgeConfigSpec.DoubleValue BOSS_PICK_CHANCE;
+    public static final ForgeConfigSpec.DoubleValue BOSS_BOX_PICK_CHANCE;
+    public static final ForgeConfigSpec.BooleanValue BOOSTER_TRADES;
     public static final ForgeConfigSpec.BooleanValue STARTER_KIT;
     public static final ForgeConfigSpec.BooleanValue GROUP_FIGHTS;
     public static final ForgeConfigSpec.BooleanValue QUICK_DUELS;
@@ -40,6 +44,14 @@ public final class MtgConfig {
                 .defineInRange("themedPackChance", 0.04, 0, 1);
         SET_PACK_DROP_CHANCE = b.comment("Chance a hostile mob killed by a player drops a real set booster.")
                 .defineInRange("setPackChance", 0.006, 0, 1);
+        DUEL_SET_PACK_CHANCE = b.comment("Chance each mob you beat in a duel also gives a real set booster (like the ones from stores).")
+                .defineInRange("duelSetPackChance", 0.10, 0, 1);
+        BOSS_PICK_CHANCE = b.comment("Chance beating a boss in a duel gives a Booster Pick: choose a booster from any set.")
+                .defineInRange("bossPickChance", 0.35, 0, 1);
+        BOSS_BOX_PICK_CHANCE = b.comment("Chance beating a boss in a duel gives a Booster Box Pick: choose a whole box from any set (rare).")
+                .defineInRange("bossBoxPickChance", 0.04, 0, 1);
+        BOOSTER_TRADES = b.comment("Wandering traders and librarian villagers sell real set boosters for emeralds.")
+                .define("boosterTrades", true);
         b.pop();
         b.push("survival");
         STARTER_KIT = b.comment("Offer new players a starter deck (Deck Box, Binder, Duel Gauntlet and a few packs).")

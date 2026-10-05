@@ -158,14 +158,62 @@ public final class Packets {
 
     // ------------------------------------------------------------------ popups
 
-    /** A player's auto-pass setting (on: pass for them when they have nothing to play). */
-    public record AutoPassPref(boolean on) {
-        public void write(FriendlyByteBuf buf) { buf.writeBoolean(on); }
-        public static AutoPassPref read(FriendlyByteBuf buf) { return new AutoPassPref(buf.readBoolean()); }
+    /** A player's auto-pass setting (on: pass for them when they have nothing to play) and the phases they skip. */
+    public record AutoPassPref(boolean on, int skips) {
+        public void write(FriendlyByteBuf buf) {
+            buf.writeBoolean(on);
+            buf.writeVarInt(skips);
+        }
+
+        public static AutoPassPref read(FriendlyByteBuf buf) { return new AutoPassPref(buf.readBoolean(), buf.readVarInt()); }
 
         public void handle(Supplier<NetworkEvent.Context> ctx) {
             ServerPlayer p = ctx.get().getSender();
-            if (p != null) dev.mtgcraft.engine.net.AutoPass.setEnabled(p.getUUID(), on);
+            if (p == null) return;
+            dev.mtgcraft.engine.net.AutoPass.setEnabled(p.getUUID(), on);
+            dev.mtgcraft.engine.net.AutoPass.setSkips(p.getUUID(), skips);
+        }
+    }
+
+    /** Opens the set picker for a Booster Pick ticket: every set the server can print, oldest first. */
+    public record SetPicker(boolean box, List<String> codes, List<String> names) {
+        public void write(FriendlyByteBuf buf) {
+            buf.writeBoolean(box);
+            buf.writeVarInt(codes.size());
+            for (int i = 0; i < codes.size(); i++) {
+                buf.writeUtf(codes.get(i));
+                buf.writeUtf(names.get(i));
+            }
+        }
+
+        public static SetPicker read(FriendlyByteBuf buf) {
+            boolean box = buf.readBoolean();
+            int n = buf.readVarInt();
+            List<String> codes = new ArrayList<>(), names = new ArrayList<>();
+            for (int i = 0; i < n; i++) {
+                codes.add(buf.readUtf());
+                names.add(buf.readUtf());
+            }
+            return new SetPicker(box, codes, names);
+        }
+
+        public void handle(Supplier<NetworkEvent.Context> ctx) {
+            DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> dev.mtgcraft.client.SetPickerScreen.show(this));
+        }
+    }
+
+    /** The set a player chose for their Booster Pick ticket. */
+    public record PickSet(boolean box, String set) {
+        public void write(FriendlyByteBuf buf) {
+            buf.writeBoolean(box);
+            buf.writeUtf(set);
+        }
+
+        public static PickSet read(FriendlyByteBuf buf) { return new PickSet(buf.readBoolean(), buf.readUtf()); }
+
+        public void handle(Supplier<NetworkEvent.Context> ctx) {
+            ServerPlayer p = ctx.get().getSender();
+            if (p != null) dev.mtgcraft.item.PackItem.redeem(p, box, set);
         }
     }
 

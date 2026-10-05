@@ -10,7 +10,7 @@ import net.minecraftforge.network.simple.SimpleChannel;
 
 /** The mod's network channel. Packet handling lives in {@link Packets}. */
 public final class Net {
-    private static final String VERSION = "3";
+    private static final String VERSION = "4";
 
     public static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(
             new ResourceLocation(MtgCraft.MODID, "main"), () -> VERSION, VERSION::equals, VERSION::equals);
@@ -79,6 +79,12 @@ public final class Net {
         CHANNEL.messageBuilder(Packets.AutoPassPref.class, id++, NetworkDirection.PLAY_TO_SERVER)
                 .encoder(Packets.AutoPassPref::write).decoder(Packets.AutoPassPref::read)
                 .consumerMainThread(Packets.AutoPassPref::handle).add();
+        CHANNEL.messageBuilder(Packets.SetPicker.class, id++, NetworkDirection.PLAY_TO_CLIENT)
+                .encoder(Packets.SetPicker::write).decoder(Packets.SetPicker::read)
+                .consumerMainThread(Packets.SetPicker::handle).add();
+        CHANNEL.messageBuilder(Packets.PickSet.class, id++, NetworkDirection.PLAY_TO_SERVER)
+                .encoder(Packets.PickSet::write).decoder(Packets.PickSet::read)
+                .consumerMainThread(Packets.PickSet::handle).add();
     }
 
     /**

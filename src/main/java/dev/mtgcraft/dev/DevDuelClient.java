@@ -27,7 +27,8 @@ import java.util.List;
 @Mod.EventBusSubscriber(modid = MtgCraft.MODID, value = Dist.CLIENT)
 public final class DevDuelClient {
     private static final boolean ON = Boolean.getBoolean("mtgcraft.devDuel");
-    private static int ticks, shots, hidden;
+    private static int ticks, shots, hidden, pickerTicks;
+    private static boolean skipSet;
     /** -Dmtgcraft.devArena: keep the 3D arena view and also take shots without the duel screen. */
     private static final boolean ARENA = Boolean.getBoolean("mtgcraft.devArena");
 
@@ -68,6 +69,28 @@ public final class DevDuelClient {
                 dev.mtgcraft.client.ClientTables.reopenAny();
             }
             return;
+        }
+        if (mc.screen instanceof dev.mtgcraft.client.SetPickerScreen picker) {
+            // -PdevPicker: shoot the picker, then pick the newest set.
+            pickerTicks++;
+            if (pickerTicks == 40) Screenshot.grab(mc.gameDirectory, "picker.png", mc.getMainRenderTarget(), msg -> {});
+            if (pickerTicks == 50) {
+                int pw = Math.min(picker.width - 20, 300), ph = Math.min(picker.height - 20, 260);
+                double x = (picker.width - pw) / 2.0 + 40, y = (picker.height - ph) / 2.0 + 50 + 5;
+                picker.mouseClicked(x, y, 0);
+                picker.mouseClicked(x, y, 0);
+                System.out.println("[MTGCraft dev] picked; screen now " + mc.screen);
+            }
+            return;
+        }
+        if (pickerTicks > 0 && ++pickerTicks == 120) System.out.println("[MTGCraft dev] after pick, screen " + mc.screen);
+        if (pickerTicks == 120 && mc.player != null) {
+            for (var st : mc.player.getInventory().items) if (!st.isEmpty()) System.out.println("[MTGCraft dev] holding " + st.getHoverName().getString());
+        }
+        if (Boolean.getBoolean("mtgcraft.devSkip") && mc.screen instanceof DuelScreen && !skipSet) {
+            skipSet = true;
+            dev.mtgcraft.MtgClientConfig.SKIP_PHASES.set(3);
+            dev.mtgcraft.client.ClientTables.sendAutoPass();
         }
         if (!(mc.screen instanceof DuelScreen screen) || shots >= 120) return;
         if (++ticks % 50 != 0) return;

@@ -28,7 +28,7 @@ import java.util.Map;
 @Mod.EventBusSubscriber(modid = MtgCraft.MODID)
 public final class DevDuel {
     private static final boolean ON = Boolean.getBoolean("mtgcraft.devDuel");
-    private static boolean started;
+    private static boolean started, poolsReported;
     private static int ticks;
 
     private DevDuel() {}
@@ -37,12 +37,27 @@ public final class DevDuel {
     public static void tick(TickEvent.ServerTickEvent event) {
         if (!ON || started || event.phase != TickEvent.Phase.END || ++ticks % 20 != 0) return;
         if (ForgeEngine.state() != ForgeEngine.State.READY) return;
+        if (Boolean.getBoolean("mtgcraft.devPools") && !poolsReported) {
+            // -PdevPools: how many cards each themed pack can draw from, and a deck built from each.
+            poolsReported = true;
+            for (Packs.Theme t : Packs.Theme.values()) {
+                int[] n = Packs.poolSizes(t);
+                int deck = Packs.themeDeck(t, 6, "x").getMain().countAll();
+                System.out.println("[MTGCraft dev] pool " + t + " C" + n[0] + " U" + n[1] + " R" + n[2] + " M" + n[3]
+                        + " pack=" + Packs.openTheme(t).size() + " deck=" + deck + " available=" + t.available());
+            }
+        }
         for (ServerPlayer p : event.getServer().getPlayerList().getPlayers()) {
             if (!TableSessions.isReady(p.getUUID())) continue;
             started = true;
             // -Dmtgcraft.devLose keeps survival so the loss penalty can be checked.
             if (!Boolean.getBoolean("mtgcraft.devLose")) p.setGameMode(GameType.CREATIVE);
             p.serverLevel().setDayTime(1000);
+            if (Boolean.getBoolean("mtgcraft.devPicker")) {
+                p.setItemInHand(net.minecraft.world.InteractionHand.MAIN_HAND, dev.mtgcraft.item.PackItem.ticket(false));
+                p.getMainHandItem().use(p.level(), p, net.minecraft.world.InteractionHand.MAIN_HAND);
+                return;
+            }
             Deck deck = Packs.themeDeck(Packs.Theme.VILLAGE, 6, "Dev deck");
             ItemStack box = new ItemStack(MtgCraft.DECK_BOX.get());
             for (Map.Entry<PaperCard, Integer> e : deck.getMain()) CardBag.add(box, Cards.key(e.getKey()), false, e.getValue());
