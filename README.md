@@ -4,7 +4,7 @@ Ready-to-use mod jars. Click a jar below, then the **Download** button (or "View
 
 | File | For | Minecraft |
 |------|-----|-----------|
-| `mtgcraft-0.2.1.jar` | All the Mods 9 (ATM9) | 1.20.1, Forge 47.4+ |
+| `mtgcraft-0.2.2.jar` | All the Mods 9 (ATM9) | 1.20.1, Forge 47.4+ |
 
 ## Install
 1. Delete the old `mtgcraft-*.jar` from your instance's `mods` folder.
