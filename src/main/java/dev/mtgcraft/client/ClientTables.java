@@ -92,7 +92,16 @@ public final class ClientTables {
 
     private static void close(RemoteDuel duel) {
         DUELS.values().remove(duel);
+        duel.gui.abandon();
         duel.close();
+    }
+
+    /** Whether this duel is a Duel Gauntlet fight (false for Magic Table games). */
+    public static boolean isGauntletDuel(dev.mtgcraft.engine.DuelGui gui) {
+        for (Map.Entry<BlockPos, RemoteDuel> e : DUEL_AT.entrySet()) {
+            if (e.getValue().gui == gui) return GAUNTLET.contains(e.getKey());
+        }
+        return false;
     }
 
     /** Client tick: tell the server once Card-Forge has finished loading here. */
@@ -100,6 +109,7 @@ public final class ClientTables {
         Minecraft mc = Minecraft.getInstance();
         if (!sentReady && mc.getConnection() != null && ForgeEngine.state() == ForgeEngine.State.READY) {
             Net.toServer(new Packets.EngineReady());
+            sendAutoPass();
             sentReady = true;
             // The Boosters tab can now list every set: rebuild it.
             if (mc.player != null && mc.level != null) {
@@ -109,10 +119,25 @@ public final class ClientTables {
         }
     }
 
+    /** Tells the server whether to auto-pass for this player (their client setting). */
+    public static void sendAutoPass() {
+        if (Minecraft.getInstance().getConnection() == null) return;
+        boolean on;
+        try {
+            on = dev.mtgcraft.MtgClientConfig.AUTO_PASS.get();
+        } catch (IllegalStateException notLoaded) {
+            on = true;
+        }
+        Net.toServer(new Packets.AutoPassPref(on));
+    }
+
     public static void loggedOut() {
         sentReady = false;
         STATES.clear();
-        for (RemoteDuel d : DUELS.values()) d.close();
+        for (RemoteDuel d : DUELS.values()) {
+            d.gui.abandon();
+            d.close();
+        }
         DUELS.clear();
         DUEL_AT.clear();
     }

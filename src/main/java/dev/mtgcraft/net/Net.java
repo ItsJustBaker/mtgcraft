@@ -10,7 +10,7 @@ import net.minecraftforge.network.simple.SimpleChannel;
 
 /** The mod's network channel. Packet handling lives in {@link Packets}. */
 public final class Net {
-    private static final String VERSION = "2";
+    private static final String VERSION = "3";
 
     public static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(
             new ResourceLocation(MtgCraft.MODID, "main"), () -> VERSION, VERSION::equals, VERSION::equals);
@@ -74,6 +74,11 @@ public final class Net {
         CHANNEL.messageBuilder(Packets.Rewards.class, id++, NetworkDirection.PLAY_TO_CLIENT)
                 .encoder(Packets.Rewards::write).decoder(Packets.Rewards::read)
                 .consumerMainThread(Packets.Rewards::handle).add();
+        // New packets go at the end, and VERSION goes up whenever the packet list or a payload changes, so mismatched
+        // client and server jars refuse each other at login instead of misreading packets.
+        CHANNEL.messageBuilder(Packets.AutoPassPref.class, id++, NetworkDirection.PLAY_TO_SERVER)
+                .encoder(Packets.AutoPassPref::write).decoder(Packets.AutoPassPref::read)
+                .consumerMainThread(Packets.AutoPassPref::handle).add();
     }
 
     /**

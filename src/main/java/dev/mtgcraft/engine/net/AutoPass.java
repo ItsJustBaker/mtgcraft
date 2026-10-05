@@ -31,11 +31,24 @@ public final class AutoPass {
     private static final ZoneType[] ZONES = {ZoneType.Hand, ZoneType.Battlefield, ZoneType.Graveyard, ZoneType.Exile,
             ZoneType.Command, ZoneType.Library};
 
+    /** Players who turned auto-pass off (their client setting). Everyone else has it on. */
+    private static final java.util.Set<java.util.UUID> OFF = java.util.concurrent.ConcurrentHashMap.newKeySet();
+
     private AutoPass() {}
 
+    /** A player's choice, sent by their client when it connects and whenever they change it. */
+    public static void setEnabled(java.util.UUID player, boolean on) {
+        if (on) OFF.remove(player);
+        else OFF.add(player);
+    }
+
+    public static boolean enabled(java.util.UUID player) {
+        return player == null || !OFF.contains(player);
+    }
+
     /** Called when a prompt is shown to the player behind {@code controller}. */
-    public static void onPrompt(PlayerControllerHuman controller) {
-        if (controller == null) return;
+    public static void onPrompt(PlayerControllerHuman controller, java.util.UUID player) {
+        if (controller == null || !enabled(player)) return;
         Input input = controller.getInputQueue().getInput();
         if (!(input instanceof InputPassPriority)) return;
         boolean moves;

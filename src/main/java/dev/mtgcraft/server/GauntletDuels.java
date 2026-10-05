@@ -57,6 +57,7 @@ import java.util.UUID;
 @Mod.EventBusSubscriber(modid = MtgCraft.MODID)
 public final class GauntletDuels {
     private static final int MAX_SEATS = MatchSetup.MAX_SEATS;
+    private static final boolean DEV = Boolean.getBoolean("mtgcraft.devDuel");
     private static final double FRIEND_RANGE = 8;
     /** Friends must stay this close to the challenger to be pulled into the duel (and onto the stage). */
     private static final double JOIN_RANGE = 16;
@@ -85,6 +86,8 @@ public final class GauntletDuels {
         final Map<UUID, boolean[]> hadFlight = new HashMap<>();
         /** Each duelist's podium spot (players and mobs); they're held there for the whole duel. */
         final Map<UUID, Vec3> spots = new HashMap<>();
+        /** Which way each seated mob faces (yaw), held for the whole duel. */
+        final Map<UUID, Float> facing = new HashMap<>();
         /** The challengers' team name, when friends fight together. */
         String teamName = "";
         MatchSetup setup;
@@ -130,6 +133,27 @@ public final class GauntletDuels {
     private static String teamName(UUID host) {
         java.util.Random r = new java.util.Random(host.getMostSignificantBits() ^ tick);
         return "Team " + TEAM_A[r.nextInt(TEAM_A.length)] + " " + TEAM_B[r.nextInt(TEAM_B.length)];
+    }
+
+    /** Mobs being killed at the end of a won duel, and the list their drops are caught into. */
+    private static final Map<UUID, List<ItemStack>> CATCH = new HashMap<>();
+    /** Mobs whose XP is handed out by the duel instead of dropped as orbs (the dragon, while it's being killed). */
+    private static final Set<UUID> NO_XP = new HashSet<>();
+
+    /** Catches the normal drops of mobs that lost a duel, after every mod has added its loot. */
+    @SubscribeEvent(priority = net.minecraftforge.eventbus.api.EventPriority.LOWEST)
+    public static void catchDrops(net.minecraftforge.event.entity.living.LivingDropsEvent event) {
+        List<ItemStack> into = CATCH.get(event.getEntity().getUUID());
+        if (into == null) return;
+        for (net.minecraft.world.entity.item.ItemEntity drop : event.getDrops()) {
+            if (!drop.getItem().isEmpty()) into.add(drop.getItem().copy());
+        }
+        event.setCanceled(true);
+    }
+
+    @SubscribeEvent
+    public static void catchXp(net.minecraftforge.event.entity.living.LivingExperienceDropEvent event) {
+        if (NO_XP.contains(event.getEntity().getUUID())) event.setDroppedExperience(0);
     }
 
     /** Players just out of a duel, with the tick their safe time ends: mobs leave them alone until then. */
@@ -303,7 +327,8 @@ public final class GauntletDuels {
 
         Duel d = new Duel();
         d.level = player.serverLevel();
-        d.boss = MobThemes.isBoss(target) || MobThemes.isBoss(mount(target));
+        // A boss anywhere in the ride stack (a boss rider on its mount) makes it a boss duel, whichever was clicked.
+        d.boss = group(mount(target)).stream().anyMatch(MobThemes::isBoss);
         d.radius = d.boss ? 7.5f : 5f;
         d.teamName = teamName;
 
@@ -402,14 +427,18 @@ public final class GauntletDuels {
         // Freeze everyone at the table.
         for (Mob m : d.everyone) {
             d.hadNoAi.put(m.getUUID(), m.isNoAi());
-            m.setNoAi(true);
             m.setTarget(null);
             m.getNavigation().stop();
             m.setPersistenceRequired();
-            m.lookAt(EntityAnchorArgument.Anchor.EYES, player.getEyePosition());
             if (m instanceof net.minecraft.world.entity.boss.enderdragon.EnderDragon dragon) {
-                // The dragon ignores NoAI; make it hover on its spot instead.
+                // Not NoAI for the dragon: with NoAI the game stops updating its body and tail, so after the move to
+                // its seat they'd be drawn where it used to be (twisted, or off somewhere out of sight). It hovers on
+                // its spot instead, and the duel tick keeps it there, facing the field.
+                dragon.setNoAi(false);
                 dragon.getPhaseManager().setPhase(net.minecraft.world.entity.boss.enderdragon.phases.EnderDragonPhase.HOVERING);
+            } else {
+                m.setNoAi(true);
+                m.lookAt(EntityAnchorArgument.Anchor.EYES, player.getEyePosition());
             }
             BY_MOB.put(m.getUUID(), d);
         }
@@ -498,11 +527,14 @@ public final class GauntletDuels {
                     d.hadNoGravity.put(rider.getUUID(), rider.isNoGravity());
                     rider.setNoGravity(true);
                 }
-                e.moveTo(x, c.y + lift, z, yaw, 0);
+                // The Ender Dragon's head is on the opposite side to other mobs' faces (its yaw points backwards).
+                float face = e instanceof net.minecraft.world.entity.boss.enderdragon.EnderDragon ? yaw + 180 : yaw;
+                e.moveTo(x, c.y + lift, z, face, 0);
                 e.setXRot(0);
-                e.setYHeadRot(yaw);
-                e.setYBodyRot(yaw);
+                e.setYHeadRot(face);
+                e.setYBodyRot(face);
                 d.spots.put(e.getUUID(), new Vec3(x, c.y + lift, z));
+                d.facing.put(e.getUUID(), face);
             }
         }
     }
@@ -578,13 +610,17 @@ public final class GauntletDuels {
      */
     private static double stageHeight(ServerLevel level, Vec3 mid, float radius) {
         int top = (int) Math.floor(mid.y) - 1;
+        // Under the open sky the stage rises over hills and trees up to 24 blocks above the duelists (only very tall
+        // things, like the End's obsidian towers, poke through). In caves or the Nether the "height" is the roof,
+        // so only blocks close to the duel count there.
+        boolean outdoors = level.canSeeSky(BlockPos.containing(mid.x, mid.y + 1, mid.z));
+        int reach = outdoors ? 24 : 12;
         for (int dx = (int) -radius; dx <= radius; dx++) {
             for (int dz = (int) -radius; dz <= radius; dz++) {
                 if (dx * dx + dz * dz > radius * radius) continue;
                 int x = (int) Math.floor(mid.x) + dx, z = (int) Math.floor(mid.z) + dz;
                 int h = level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING, x, z);
-                // Ignore the sky limit in caves/the nether: only count blocks near the duel.
-                if (h <= mid.y + 12) top = Math.max(top, h);
+                if (h <= mid.y + reach) top = Math.max(top, h);
             }
         }
         return Math.max(mid.y, top + 1.2);
@@ -647,7 +683,12 @@ public final class GauntletDuels {
         for (UUID id : d.players.keySet()) BY_PLAYER.remove(id);
         for (Mob m : d.everyone) {
             Boolean grav = d.hadNoGravity.get(m.getUUID());
-            if (grav != null && m.isAlive()) m.setNoGravity(grav);
+            if (grav != null && m.isAlive()) {
+                m.setNoGravity(grav);
+                // The stage can float well above the ground: drift down instead of taking fall damage.
+                m.fallDistance = 0;
+                if (!grav) m.addEffect(new net.minecraft.world.effect.MobEffectInstance(net.minecraft.world.effect.MobEffects.SLOW_FALLING, 200, 0, false, false));
+            }
         }
         for (Map.Entry<UUID, boolean[]> f : d.hadFlight.entrySet()) {
             ServerPlayer p = DuelHosting.online(d.level.getServer(), f.getKey());
@@ -698,28 +739,56 @@ public final class GauntletDuels {
             for (ServerPlayer p : online) {
                 p.displayClientMessage(Component.literal("Victory!").withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD), true);
             }
-            // Everyone who fought gets their own rewards, straight into their inventory, and sees what they got.
-            for (ServerPlayer p : online) {
-                if (d.forfeited.contains(p.getUUID())) continue;
-                List<ItemStack> loot = DuelLoot.duelRewards(d.mobs.stream().map(GauntletDuels::rider).toList(), d.boss);
+            // Every mob at the table falls. Their normal drops and XP are caught (not dropped off the stage) and
+            // shared out below with the duel's own rewards. DEFEATED: their deaths drop no extra packs.
+            List<ItemStack> drops = new ArrayList<>();
+            int xp = 0;
+            for (Mob m : d.everyone) DEFEATED.add(m.getUUID());
+            for (Mob m : d.everyone) {
+                if (!m.isAlive()) continue;
+                if (m instanceof net.minecraft.world.entity.boss.enderdragon.EnderDragon dragon) {
+                    // The dragon pays out its XP during its death animation: work it out now and catch those orbs.
+                    var fight = dragon.getDragonFight();
+                    xp += fight != null && !fight.hasPreviouslyKilledDragon() ? 12000 : 500;
+                    NO_XP.add(m.getUUID());
+                } else {
+                    xp += Math.max(0, m.getExperienceReward());
+                    m.skipDropExperience();
+                }
+                CATCH.put(m.getUUID(), drops);
+                m.hurt(credit != null ? credit.damageSources().playerAttack(credit) : m.damageSources().magic(), Float.MAX_VALUE);
+                if (m.isAlive()) m.kill();
+                CATCH.remove(m.getUUID());
+                NO_XP.remove(m.getUUID());
+            }
+            // Everyone who fought gets their own pack rewards; the mobs' drops are dealt out between them and the XP
+            // split evenly. It all goes straight into the inventory, and the rewards screen shows what they got.
+            List<ServerPlayer> winners = new ArrayList<>();
+            for (ServerPlayer p : online) if (!d.forfeited.contains(p.getUUID())) winners.add(p);
+            List<List<ItemStack>> shares = new ArrayList<>();
+            for (int i = 0; i < winners.size(); i++) shares.add(new ArrayList<>());
+            for (int i = 0; i < drops.size() && !winners.isEmpty(); i++) shares.get(i % winners.size()).add(drops.get(i));
+            for (int i = 0; i < winners.size(); i++) {
+                ServerPlayer p = winners.get(i);
+                List<ItemStack> loot = new ArrayList<>(DuelLoot.duelRewards(d.mobs.stream().map(GauntletDuels::rider).toList(), d.boss));
+                loot.addAll(shares.get(i));
                 for (ItemStack it : loot) {
                     ItemStack give = it.copy();
                     if (!p.getInventory().add(give)) p.drop(give, false);
                 }
-                String sub = d.players.size() > 1 ? d.teamName + " wins!" : "You beat " + String.join(", ", seatNames(d)) + ".";
+                int myXp = xp / winners.size() + (i < xp % winners.size() ? 1 : 0);
+                if (myXp > 0) p.giveExperiencePoints(myXp);
+                String sub = (d.players.size() > 1 ? d.teamName + " wins!" : "You beat " + String.join(", ", seatNames(d)) + ".")
+                        + (myXp > 0 ? "  +" + myXp + " XP" : "");
                 Net.toPlayer(p, new Packets.Rewards("Victory!", sub, loot));
-            }
-            // Every mob at the table falls. Rewards were handed out above, so their deaths drop no extra packs.
-            for (Mob m : d.everyone) DEFEATED.add(m.getUUID());
-            for (Mob m : d.everyone) {
-                if (!m.isAlive()) continue;
-                m.hurt(credit != null ? credit.damageSources().playerAttack(credit) : m.damageSources().magic(), Float.MAX_VALUE);
-                if (m.isAlive()) m.kill();
             }
             return;
         }
         Mob victor = d.mobs.isEmpty() ? null : d.mobs.get(0);
         for (ServerPlayer p : online) {
+            // The safe time would cancel the penalty itself (the hit comes from the mob): lift it for the hit, and
+            // give it back to anyone who survives it.
+            Long safeUntil = GRACE.remove(p.getUUID());
             switch (MtgConfig.LOSS_PENALTY.get()) {
                 case DEATH -> {
                     tell(p, "You lost the duel...");
@@ -731,6 +800,7 @@ public final class GauntletDuels {
                 }
                 case NONE -> tell(p, "You lost the duel.");
             }
+            if (p.isAlive() && safeUntil != null) GRACE.put(p.getUUID(), safeUntil);
         }
     }
 
@@ -946,23 +1016,34 @@ public final class GauntletDuels {
                 ServerPlayer p = DuelHosting.online(d.level.getServer(), id);
                 Vec3 spot = d.spots.get(id);
                 if (p != null && p.isAlive() && p.level() == d.level && spot != null) {
+                    // The stage has no blocks under it: keep everyone flying (double-tapping jump or touching
+                    // down would otherwise turn it off, they'd fall, and get pulled back up over and over).
+                    if (!p.getAbilities().mayfly || !p.getAbilities().flying) {
+                        p.getAbilities().mayfly = true;
+                        p.getAbilities().flying = true;
+                        p.onUpdateAbilities();
+                    }
                     if (d.boss) {
                         // Boss arenas are big: walk around the stage, but stay on its floor and inside the barrier.
                         Vec3 pos = p.position();
                         double dx = pos.x - d.center.x, dz = pos.z - d.center.z, dist = Math.sqrt(dx * dx + dz * dz);
                         double max = Math.max(1, d.radius - 0.6);
                         double nx = pos.x, nz = pos.z;
-                        boolean fix = Math.abs(pos.y - spot.y) > 0.25;
+                        // Only correct real drift: a teleport makes the game ignore movement until the client
+                        // answers it, so doing it too often makes it feel like you can't move.
+                        boolean fix = Math.abs(pos.y - spot.y) > 0.75;
                         if (dist > max) {
                             nx = d.center.x + dx / dist * max;
                             nz = d.center.z + dz / dist * max;
                             fix = true;
                         }
                         if (fix) {
+                            if (DEV) System.out.println("[MTGCraft dev] boss clamp: pos=" + pos + " spot=" + spot + " dist=" + dist + " max=" + max);
                             p.teleportTo(d.level, nx, spot.y, nz, p.getYRot(), p.getXRot());
                             p.setDeltaMovement(Vec3.ZERO);
                         }
                     } else if (p.position().distanceToSqr(spot) > 0.36) {
+                        if (DEV) System.out.println("[MTGCraft dev] podium snap: pos=" + p.position() + " spot=" + spot + " boss=" + d.boss);
                         // No flying off: back onto the podium (looking where they were looking).
                         p.teleportTo(d.level, spot.x, spot.y, spot.z, p.getYRot(), p.getXRot());
                         p.setDeltaMovement(Vec3.ZERO);
@@ -979,15 +1060,28 @@ public final class GauntletDuels {
             // Mobs (the dragon especially) stay on their spots.
             for (Mob m : d.mobs) {
                 Vec3 spot = d.spots.get(m.getUUID());
-                if (spot != null && m.isAlive() && m.position().distanceToSqr(spot) > 0.5) {
-                    m.moveTo(spot.x, spot.y, spot.z, m.getYRot(), m.getXRot());
-                    m.setDeltaMovement(Vec3.ZERO);
+                // Only the dragon holds a fixed facing; other mobs turn to watch the duelists.
+                Float face = m instanceof net.minecraft.world.entity.boss.enderdragon.EnderDragon ? d.facing.get(m.getUUID()) : null;
+                if (spot == null || !m.isAlive()) continue;
+                boolean turned = face != null && Math.abs(net.minecraft.util.Mth.wrapDegrees(m.getYRot() - face)) > 3;
+                if (m.position().distanceToSqr(spot) > 0.5 || turned) {
+                    float yaw = face != null ? face : m.getYRot();
+                    m.moveTo(spot.x, spot.y, spot.z, yaw, 0);
+                    m.setYBodyRot(yaw);
+                    m.setYHeadRot(yaw);
                 }
+                m.setDeltaMovement(Vec3.ZERO);
             }
             if (tick % 20 == 0) stopTargeting(d.level, d.center, d.radius + 24, d.players.keySet());
             runeCircle(d);
             if (looker != null) {
-                for (Mob m : d.everyone) if (m.isAlive()) m.lookAt(EntityAnchorArgument.Anchor.EYES, looker.getEyePosition());
+                for (Mob m : d.everyone) {
+                    // Mobs watch the duelists. Not the dragon: lookAt turns its body the wrong way round (its head
+                    // points opposite to other mobs' faces), and it holds the facing it was seated with instead.
+                    if (m.isAlive() && !(m instanceof net.minecraft.world.entity.boss.enderdragon.EnderDragon)) {
+                        m.lookAt(EntityAnchorArgument.Anchor.EYES, looker.getEyePosition());
+                    }
+                }
             }
             // Undead don't burn in the sun while they're sitting at the table.
             for (Mob m : d.everyone) {
@@ -1014,7 +1108,20 @@ public final class GauntletDuels {
     @SubscribeEvent
     public static void loggedOut(PlayerEvent.PlayerLoggedOutEvent event) {
         Duel d = BY_PLAYER.get(event.getEntity().getUUID());
-        if (d != null) d.forfeit(event.getEntity().getUUID());
+        if (d == null) return;
+        // They're saved right after this: give their flight back and let them drift down from the stage when they
+        // come back, instead of falling when they rejoin mid-air.
+        if (event.getEntity() instanceof ServerPlayer p) {
+            boolean[] f = d.hadFlight.remove(p.getUUID());
+            if (f != null) {
+                p.getAbilities().mayfly = f[0] || p.isCreative() || p.isSpectator();
+                p.getAbilities().flying = f[1] && p.getAbilities().mayfly;
+                p.onUpdateAbilities();
+            }
+            p.fallDistance = 0;
+            p.addEffect(new net.minecraft.world.effect.MobEffectInstance(net.minecraft.world.effect.MobEffects.SLOW_FALLING, 400, 0, false, false));
+        }
+        d.forfeit(event.getEntity().getUUID());
     }
 
     @SubscribeEvent

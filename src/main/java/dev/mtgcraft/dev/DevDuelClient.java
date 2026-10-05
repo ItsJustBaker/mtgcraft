@@ -39,6 +39,30 @@ public final class DevDuelClient {
         Minecraft mc = Minecraft.getInstance();
         if (ARENA && hidden > 0) {
             // A clean shot of the 3D battlefield with the duel screen out of the way, then back to the cards.
+            // Meanwhile walk forward, to check players can move around the arena.
+            if (mc.player != null) {
+                if (hidden == 12) walkFrom = mc.player.position();
+                mc.options.keyUp.setDown(hidden > 2);
+                if (hidden == 6) System.out.println("[MTGCraft dev] input forward=" + mc.player.input.forwardImpulse + " up=" + mc.player.input.up
+                        + " keyUp=" + mc.options.keyUp.isDown() + " pos=" + mc.player.position());
+                if (hidden == 1 && walkFrom != null) {
+                    System.out.println("[MTGCraft dev] walked " + String.format("%.2f", mc.player.position().distanceTo(walkFrom))
+                            + " blocks with the cards put away (flying=" + mc.player.getAbilities().flying + ")");
+                }
+            }
+            if (hidden == 2 && mc.level != null && mc.player != null) {
+                // Point the camera at the boss for the shot (alternate shots look at the field instead).
+                net.minecraft.world.entity.Entity boss = null;
+                for (var e : mc.level.entitiesForRendering()) {
+                    if (e instanceof net.minecraft.world.entity.boss.enderdragon.EnderDragon || e instanceof net.minecraft.world.entity.boss.wither.WitherBoss) boss = e;
+                }
+                if (boss != null && (shots / 3) % 2 == 0) {
+                    net.minecraft.world.phys.Vec3 to = boss.position().subtract(mc.player.getEyePosition());
+                    mc.player.setYRot((float) Math.toDegrees(Math.atan2(-to.x, to.z)));
+                    mc.player.setXRot((float) -Math.toDegrees(Math.atan2(to.y, Math.sqrt(to.x * to.x + to.z * to.z))) + 8);
+                    System.out.println("[MTGCraft dev] boss at " + boss.position() + " yaw=" + boss.getYRot() + " player at " + mc.player.position());
+                }
+            }
             if (--hidden == 0) {
                 Screenshot.grab(mc.gameDirectory, String.format("arena_%03d.png", shots++), mc.getMainRenderTarget(), msg -> {});
                 dev.mtgcraft.client.ClientTables.reopenAny();
@@ -55,6 +79,18 @@ public final class DevDuelClient {
         }
         DuelGui duel = DuelGui.active();
         Screenshot.grab(mc.gameDirectory, String.format("duel_%03d.png", shots++), mc.getMainRenderTarget(), msg -> {});
+        if (Boolean.getBoolean("mtgcraft.devLose") && shots >= 10 && !winSent && duel != null && !duel.isOver()) {
+            winSent = true;
+            System.out.println("[MTGCraft dev] conceding to test the loss penalty");
+            duel.concedeGame();
+        }
+        if (Boolean.getBoolean("mtgcraft.devWin") && shots >= 24 && !winSent && duel != null && !duel.isOver()
+                && duel.prompt != null && duel.prompt.startsWith("Priority")) {
+            winSent = true;
+            // -Dmtgcraft.devWin: use the creative Win button, to check the victory path (drops, XP, rewards screen).
+            System.out.println("[MTGCraft dev] pressing creative Win");
+            dev.mtgcraft.net.Net.toServer(new dev.mtgcraft.net.Packets.CheatWin());
+        }
         if (duel == null) return;
         // Every so often, show the zone viewer or the log for the next screenshot.
         if (shots % 9 == 3) { screen.keyPressed(GLFW.GLFW_KEY_Z, 0, 0); return; }
@@ -84,6 +120,8 @@ public final class DevDuelClient {
     }
 
     private static int landTurn = -1, castTurn = -1;
+    private static net.minecraft.world.phys.Vec3 walkFrom;
+    private static boolean winSent;
 
     /** Plays like a beginner: a land, then a spell, attacks with everything, discards the first card. */
     private static boolean act(DuelGui duel) {

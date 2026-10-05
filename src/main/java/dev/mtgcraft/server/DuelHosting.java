@@ -114,6 +114,7 @@ public final class DuelHosting {
                 ServerPlayer target = online(server, uuid);
                 if (target != null) Net.toPlayer(target, new Packets.Tunnel(id, data));
             });
+            seat.player = uuid;
             TUNNELS.put(id, seat);
             OWNERS.put(id, uuid);
             h.seats.put(i, seat);

@@ -16,6 +16,11 @@ public class RewardsScreen extends Screen {
     private final long opened = System.currentTimeMillis();
 
     public static void show(Packets.Rewards msg) {
+        if (Boolean.getBoolean("mtgcraft.devDuel")) {
+            StringBuilder items = new StringBuilder();
+            for (var it : msg.items()) items.append(it.getCount()).append("x ").append(it.getHoverName().getString()).append(", ");
+            System.out.println("[MTGCraft dev] rewards: " + msg.title() + " / " + msg.subtitle() + " / " + items);
+        }
         Minecraft mc = Minecraft.getInstance();
         // The duel screen shows its result first; open the rewards once it's closed.
         if (mc.screen instanceof DuelScreen ds) {

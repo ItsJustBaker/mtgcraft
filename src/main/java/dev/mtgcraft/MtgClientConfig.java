@@ -7,6 +7,7 @@ public final class MtgClientConfig {
     public static final ForgeConfigSpec SPEC;
     public static final ForgeConfigSpec.BooleanValue DUEL_INTRO;
     public static final ForgeConfigSpec.BooleanValue ARENA_VIEW;
+    public static final ForgeConfigSpec.BooleanValue AUTO_PASS;
 
     static {
         ForgeConfigSpec.Builder b = new ForgeConfigSpec.Builder();
@@ -14,6 +15,8 @@ public final class MtgClientConfig {
                 .define("duelIntro", true);
         ARENA_VIEW = b.comment("Start duels in the 3D arena view (true) or on the 2D table screen (false).")
                 .define("arenaView", true);
+        AUTO_PASS = b.comment("Pass automatically when you have nothing you can play (you still decide blocks, targets and questions).")
+                .define("autoPass", true);
         SPEC = b.build();
     }
 
