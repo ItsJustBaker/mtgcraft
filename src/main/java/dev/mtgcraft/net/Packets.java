@@ -302,13 +302,18 @@ public final class Packets {
         }
     }
 
-    public record ChooseStarter(int choice) {
-        public void write(FriendlyByteBuf buf) { buf.writeVarInt(choice); }
-        public static ChooseStarter read(FriendlyByteBuf buf) { return new ChooseStarter(buf.readVarInt()); }
+    /** The starter deck a player chose: a colour pair (bit mask of W U B R G) or a creature type. */
+    public record ChooseStarter(int colors, String tribe) {
+        public void write(FriendlyByteBuf buf) {
+            buf.writeVarInt(colors);
+            buf.writeUtf(tribe);
+        }
+
+        public static ChooseStarter read(FriendlyByteBuf buf) { return new ChooseStarter(buf.readVarInt(), buf.readUtf(64)); }
 
         public void handle(Supplier<NetworkEvent.Context> ctx) {
             ServerPlayer p = ctx.get().getSender();
-            if (p != null) dev.mtgcraft.server.StarterKits.choose(p, choice);
+            if (p != null) dev.mtgcraft.server.StarterKits.choose(p, colors, tribe);
         }
     }
 

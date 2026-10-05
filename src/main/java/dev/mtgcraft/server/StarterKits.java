@@ -5,6 +5,7 @@ import dev.mtgcraft.MtgCraft;
 import dev.mtgcraft.engine.Cards;
 import dev.mtgcraft.engine.ForgeEngine;
 import dev.mtgcraft.engine.Packs;
+import dev.mtgcraft.engine.Tribal;
 import dev.mtgcraft.item.CardBag;
 import dev.mtgcraft.item.PackItem;
 import dev.mtgcraft.net.Net;
@@ -28,14 +29,9 @@ import java.util.Map;
  * with a deck built around it) in a Deck Box, plus a Binder, a Duel Gauntlet and packs.
  */
 public final class StarterKits {
+    /** The five classic pairs offered first (more pairs come from the quiz). Names are for the offer packet. */
     public static final String[] NAMES = {"Selesnya Commander (white/green)", "Azorius Commander (white/blue)",
             "Dimir Commander (blue/black)", "Rakdos Commander (black/red)", "Gruul Commander (red/green)"};
-    private static final byte[] MASKS = {
-            forge.card.MagicColor.WHITE | forge.card.MagicColor.GREEN, forge.card.MagicColor.WHITE | forge.card.MagicColor.BLUE,
-            forge.card.MagicColor.BLUE | forge.card.MagicColor.BLACK, forge.card.MagicColor.BLACK | forge.card.MagicColor.RED,
-            forge.card.MagicColor.RED | forge.card.MagicColor.GREEN};
-    private static final String[][] COLORS = {{"White", "Green"}, {"White", "Blue"}, {"Blue", "Black"},
-            {"Black", "Red"}, {"Red", "Green"}};
     private static final String TAG = "mtgcraft_starter";
 
     private StarterKits() {}
@@ -54,23 +50,49 @@ public final class StarterKits {
         Net.toPlayer(p, new Packets.OfferStarter(List.of(NAMES)));
     }
 
-    public static void choose(ServerPlayer p, int choice) {
-        if (persisted(p).getBoolean(TAG) || choice < 0 || choice >= COLORS.length) return;
+    /**
+     * @param colors bit mask of the deck's colours (W=1 U=2 B=4 R=8 G=16), used when {@code tribe} is empty
+     * @param tribe  a creature type from {@link Tribal#TRIBES}, or empty
+     */
+    public static void choose(ServerPlayer p, int colors, String tribe) {
+        if (persisted(p).getBoolean(TAG)) return;
+        boolean byType = tribe != null && !tribe.isEmpty();
+        if (byType ? !Tribal.known(tribe) : Integer.bitCount(colors & 0x1F) == 0 || Integer.bitCount(colors & 0x1F) > 2) return;
         if (ForgeEngine.state() != ForgeEngine.State.READY) return;
         persisted(p).putBoolean(TAG, true);
         var server = p.getServer();
         ForgeEngine.runOnUi(() -> {
-            PaperCard commander = randomCommander(MASKS[choice]);
-            Deck deck = commander == null ? null
-                    : DeckgenUtil.generateRandomCommanderDeck(commander, forge.deck.DeckFormat.Commander, false, false);
-            if (deck == null) {
-                deck = DeckgenUtil.buildColorDeck(List.of(COLORS[choice]),
-                        FModel.getFormats().getModern().getFilterPrinted(), false);
+            Deck deck;
+            String name;
+            if (byType) {
+                deck = Tribal.commanderDeck(tribe, false);
+                name = deck.getName();
+            } else {
+                byte mask = (byte) (colors & 0x1F);
+                PaperCard commander = randomCommander(mask);
+                deck = commander == null ? null
+                        : DeckgenUtil.generateRandomCommanderDeck(commander, forge.deck.DeckFormat.Commander, false, false);
+                if (deck == null) deck = DeckgenUtil.buildColorDeck(colorNames(mask), FModel.getFormats().getModern().getFilterPrinted(), false);
+                name = (commander == null ? "" : commander.getName() + " ") + "(" + guild(mask) + ")";
             }
             Deck built = deck;
-            String name = commander == null ? NAMES[choice] : commander.getName() + " (" + NAMES[choice].replace(" Commander", "") + ")";
             server.execute(() -> give(p, built, name));
         });
+    }
+
+    private static List<String> colorNames(byte mask) {
+        List<String> out = new java.util.ArrayList<>();
+        for (int i = 0; i < 5; i++) if ((mask & forge.card.MagicColor.WUBRG[i]) != 0) out.add(dev.mtgcraft.engine.Duels.COLORS.get(i));
+        return out;
+    }
+
+    /** "Boros, white/red" for a colour pair. */
+    public static String guild(int mask) {
+        String[] names = {"Azorius", "Dimir", "Rakdos", "Gruul", "Selesnya", "Orzhov", "Izzet", "Golgari", "Boros", "Simic"};
+        int[] masks = {3, 6, 12, 24, 17, 5, 10, 20, 9, 18};
+        String colors = String.join("/", colorNames((byte) mask)).toLowerCase(java.util.Locale.ROOT);
+        for (int i = 0; i < masks.length; i++) if (masks[i] == mask) return names[i] + ", " + colors;
+        return colors;
     }
 
     /** A random legendary creature whose colours are exactly the pair (Modern-legal printings first). */

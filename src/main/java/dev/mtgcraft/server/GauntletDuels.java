@@ -480,7 +480,7 @@ public final class GauntletDuels {
 
     private static boolean commanderReady(DeckChoice c) {
         if (c == null) return false;
-        if (c.kind() == DeckChoice.Kind.CMD_PRECON) return true;
+        if (c.kind() == DeckChoice.Kind.CMD_PRECON || c.kind() == DeckChoice.Kind.TRIBE) return true;
         if (c.kind() != DeckChoice.Kind.INLINE) return false;
         try {
             return dev.mtgcraft.engine.Decks.isCommanderReady(dev.mtgcraft.engine.Decks.fromText(c.name()));

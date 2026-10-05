@@ -28,6 +28,7 @@ public final class ClientHooks {
             String label = switch (choice.kind()) {
                 case PRECON -> choice.name() == null ? "Random precon" : choice.name();
                 case CMD_PRECON -> choice.name() == null ? "Random commander deck" : choice.name();
+                case TRIBE -> dev.mtgcraft.engine.Tribal.label(choice.name()) + " deck";
                 case INLINE -> {
                     java.util.regex.Matcher m = java.util.regex.Pattern.compile("(?m)^Name=(.*)$").matcher(choice.name());
                     yield m.find() ? m.group(1).trim() : "Own deck";

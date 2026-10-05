@@ -108,6 +108,7 @@ public final class Matches {
         }
         if (mode.isCommanderStyle()) {
             GameType type = mode.variants.iterator().next();
+            if (seat.deck != null && seat.deck.kind() == DeckChoice.Kind.TRIBE) return Tribal.commanderDeck(seat.deck.name(), seat.ai);
             // Own decks and themed mob decks are played as they are (casual Commander, with or without a
             // commander); otherwise build a random deck for the format.
             if (seat.deck != null && (seat.deck.kind() == DeckChoice.Kind.USER || seat.deck.kind() == DeckChoice.Kind.INLINE
