@@ -63,6 +63,17 @@ public final class ArenaRenderer {
         return ARENAS.containsKey(key);
     }
 
+    /** The entity sitting in the named seat of this duel's arena (a player or the mob), or null. */
+    public static Entity entityFor(BlockPos key, String name) {
+        Packets.Arena a = ARENAS.get(key);
+        Minecraft mc = Minecraft.getInstance();
+        if (a == null || mc.level == null) return null;
+        for (Packets.ArenaSeat seat : a.seats()) {
+            if (seat.name().equals(name) && seat.entity() >= 0) return mc.level.getEntity(seat.entity());
+        }
+        return null;
+    }
+
     /** The arena the camera is standing in, if any (for the fog). */
     private static Packets.Arena around(Vec3 at) {
         for (Packets.Arena a : ARENAS.values()) {

@@ -9,5 +9,7 @@
   "item.mtgcraft.deck_box": "Deck Box",
   "item.mtgcraft.duel_gauntlet": "Duel Gauntlet",
   "itemGroup.mtgcraft.boosters": "MTGCraft Boosters",
-  "item.mtgcraft.universal_deck_box": "Universal Deck Box"
+  "item.mtgcraft.universal_deck_box": "Universal Deck Box",
+  "key.mtgcraft.view_card": "View card (hold)",
+  "key.categories.mtgcraft": "MTGCraft"
 }

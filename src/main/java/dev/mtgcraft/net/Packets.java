@@ -158,6 +158,17 @@ public final class Packets {
 
     // ------------------------------------------------------------------ popups
 
+    /** Creative mode only: win the duel you're in right now. */
+    public record CheatWin() {
+        public void write(FriendlyByteBuf buf) {}
+        public static CheatWin read(FriendlyByteBuf buf) { return new CheatWin(); }
+
+        public void handle(Supplier<NetworkEvent.Context> ctx) {
+            ServerPlayer p = ctx.get().getSender();
+            if (p != null) dev.mtgcraft.server.DuelHosting.cheatWin(p);
+        }
+    }
+
     /**
      * A small popup with buttons (duel invites, join requests). Each button runs a command as the player, e.g.
      * {@code /mtgduel accept Steve}. {@code seconds} is how long the offer lasts (0: no timer).

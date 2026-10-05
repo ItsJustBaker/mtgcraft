@@ -33,7 +33,7 @@ import java.util.UUID;
 
 /**
  * Cards in the world: mobs you beat in a duel always drop their themed pack, bosses drop their booster box, and
- * any hostile mob has a small chance to drop a pack. Your Deck Box is never lost on death.
+ * any hostile mob has a small chance to drop a pack. Your Deck Box and Duel Gauntlet are never lost on death.
  */
 @Mod.EventBusSubscriber(modid = MtgCraft.MODID)
 public final class DuelLoot {
@@ -126,7 +126,7 @@ public final class DuelLoot {
         List<ItemStack> kept = new ArrayList<>();
         for (Iterator<ItemEntity> it = event.getDrops().iterator(); it.hasNext(); ) {
             ItemEntity drop = it.next();
-            if (drop.getItem().getItem() instanceof DeckBoxItem) {
+            if (drop.getItem().getItem() instanceof DeckBoxItem || drop.getItem().getItem() instanceof dev.mtgcraft.item.GauntletItem) {
                 kept.add(drop.getItem().copy());
                 it.remove();
             }

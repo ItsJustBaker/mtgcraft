@@ -65,6 +65,9 @@ public final class Net {
         CHANNEL.messageBuilder(Packets.EngineReady.class, id++, NetworkDirection.PLAY_TO_SERVER)
                 .encoder(Packets.EngineReady::write).decoder(Packets.EngineReady::read)
                 .consumerMainThread(Packets.EngineReady::handle).add();
+        CHANNEL.messageBuilder(Packets.CheatWin.class, id++, NetworkDirection.PLAY_TO_SERVER)
+                .encoder(Packets.CheatWin::write).decoder(Packets.CheatWin::read)
+                .consumerMainThread(Packets.CheatWin::handle).add();
         CHANNEL.messageBuilder(Packets.Prompt.class, id++, NetworkDirection.PLAY_TO_CLIENT)
                 .encoder(Packets.Prompt::write).decoder(Packets.Prompt::read)
                 .consumerMainThread(Packets.Prompt::handle).add();
