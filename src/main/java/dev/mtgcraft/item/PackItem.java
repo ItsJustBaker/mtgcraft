@@ -31,6 +31,8 @@ import java.util.List;
 public class PackItem extends Item {
     public static final String TAG_THEME = "Theme";
     public static final String TAG_SET = "Set";
+    /** A Booster Pick ticket: "PACK" or "BOX". Right-click to choose any set. */
+    public static final String TAG_PICK = "Pick";
 
     public PackItem(Properties props) {
         super(props);
@@ -46,6 +48,41 @@ public class PackItem extends Item {
         ItemStack s = new ItemStack(MtgCraft.BOOSTER_PACK.get(), count);
         s.getOrCreateTag().putString(TAG_SET, setCode);
         return s;
+    }
+
+    /** A Booster Pick ticket (a prize from bosses): the player picks the set. {@code box}: a whole booster box. */
+    public static ItemStack ticket(boolean box) {
+        ItemStack s = new ItemStack(MtgCraft.BOOSTER_PACK.get());
+        s.getOrCreateTag().putString(TAG_PICK, box ? "BOX" : "PACK");
+        return s;
+    }
+
+    /** "PACK", "BOX" or null. */
+    public static String pick(ItemStack stack) {
+        CompoundTag tag = stack.getTag();
+        return tag == null || !tag.contains(TAG_PICK) ? null : tag.getString(TAG_PICK);
+    }
+
+    /** Swaps a Booster Pick ticket the player holds for the chosen set's pack or box. */
+    public static void redeem(ServerPlayer player, boolean box, String set) {
+        if (ForgeEngine.state() != ForgeEngine.State.READY || !Packs.boosterSets().contains(set)) return;
+        String kind = box ? "BOX" : "PACK";
+        for (InteractionHand hand : InteractionHand.values()) {
+            ItemStack held = player.getItemInHand(hand);
+            if (!held.is(MtgCraft.BOOSTER_PACK.get()) || !kind.equals(pick(held))) continue;
+            held.shrink(1);
+            ItemStack prize = box ? BoxItem.ofSet(set) : ofSet(set, 1);
+            if (!player.getInventory().add(prize)) player.drop(prize, false);
+            player.displayClientMessage(Component.literal("Got a " + Packs.setName(set) + (box ? " Booster Box!" : " Booster!"))
+                    .withStyle(ChatFormatting.GOLD), true);
+            player.level().playSound(null, player.blockPosition(), SoundEvents.PLAYER_LEVELUP, SoundSource.PLAYERS, 0.6f, 1.4f);
+            return;
+        }
+    }
+
+    @Override
+    public boolean isFoil(ItemStack stack) {
+        return pick(stack) != null || super.isFoil(stack);
     }
 
     public static Packs.Theme theme(ItemStack stack) {
@@ -71,6 +108,8 @@ public class PackItem extends Item {
 
     @Override
     public Component getName(ItemStack stack) {
+        String pick = pick(stack);
+        if (pick != null) return Component.literal("BOX".equals(pick) ? "Booster Box Pick" : "Booster Pick").withStyle(ChatFormatting.GOLD);
         Packs.Theme t = theme(stack);
         if (t != null) return Component.literal(t.label);
         String set = set(stack);
@@ -83,6 +122,14 @@ public class PackItem extends Item {
 
     @Override
     public void appendHoverText(ItemStack stack, Level level, List<Component> lines, TooltipFlag flag) {
+        String pick = pick(stack);
+        if (pick != null) {
+            lines.add(Component.literal("BOX".equals(pick) ? "Right-click to choose a booster box from any set"
+                    : "Right-click to choose a booster from any set").withStyle(ChatFormatting.GRAY));
+            return;
+        }
+        Packs.Theme mod = theme(stack);
+        if (mod != null && mod.mod != null) lines.add(Component.literal(mod.modName()).withStyle(ChatFormatting.BLUE, ChatFormatting.ITALIC));
         lines.add(Component.literal("Right-click to open").withStyle(ChatFormatting.GRAY));
     }
 
@@ -94,6 +141,13 @@ public class PackItem extends Item {
         if (ForgeEngine.state() != ForgeEngine.State.READY) {
             sp.displayClientMessage(Component.literal("The card engine is still loading..."), true);
             return InteractionResultHolder.fail(stack);
+        }
+        String pick = pick(stack);
+        if (pick != null) {
+            List<String> codes = new ArrayList<>(Packs.boosterSets()), names = new ArrayList<>();
+            for (String c : codes) names.add(Packs.setName(c));
+            Net.toPlayer(sp, new Packets.SetPicker("BOX".equals(pick), codes, names));
+            return InteractionResultHolder.consume(stack);
         }
         Packs.Theme t = theme(stack);
         String set = set(stack);

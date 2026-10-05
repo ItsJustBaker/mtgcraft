@@ -86,10 +86,17 @@ public final class DuelLoot {
             if (tier == MobThemes.Tier.TOUGH) loot.add(PackItem.themed(theme, 1));
             if (tier == MobThemes.Tier.BOSS || boss) loot.add(bossBox(theme));
             if (RNG.nextFloat() < 0.25f) loot.add(PackItem.themed(theme, 1));
-            if (tier != MobThemes.Tier.CRITTER && RNG.nextDouble() < 0.1) {
+            if (RNG.nextDouble() < MtgConfig.DUEL_SET_PACK_CHANCE.get()) {
                 String set = Packs.randomSet();
                 if (set != null) loot.add(PackItem.ofSet(set, 1));
             }
+        }
+        // Bosses sometimes leave a prize: pick a booster (or, rarely, a whole box) from any set.
+        boolean bossFight = boss;
+        for (LivingEntity m : beaten) if (MobThemes.tier(m) == MobThemes.Tier.BOSS) bossFight = true;
+        if (bossFight) {
+            if (RNG.nextDouble() < MtgConfig.BOSS_BOX_PICK_CHANCE.get()) loot.add(PackItem.ticket(true));
+            else if (RNG.nextDouble() < MtgConfig.BOSS_PICK_CHANCE.get()) loot.add(PackItem.ticket(false));
         }
         // Stack identical packs together.
         List<ItemStack> merged = new ArrayList<>();

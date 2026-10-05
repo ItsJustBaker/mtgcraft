@@ -41,18 +41,77 @@ public final class Packs {
         WITCH("Witch Pack", "UB", new String[]{"Warlock", "Wizard", "Shaman", "Druid"}, new String[]{"potion", "-1/-1 counter"}),
         SCULK("Sculk Pack", "BG", new String[]{"Horror", "Nightmare", "Shade"}, new String[]{"can't be blocked"}),
         ENDER_DRAGON("Ender Dragon Box", "B", new String[]{"Dragon"}, new String[]{}),
-        WITHER("Wither Box", "B", new String[]{"Skeleton", "Zombie", "Horror", "Spirit"}, new String[]{"destroy target creature"});
+        WITHER("Wither Box", "B", new String[]{"Skeleton", "Zombie", "Horror", "Spirit"}, new String[]{"destroy target creature"}),
+
+        // ---- more vanilla themes (new ones always go at the end: saved packs and item models use this order)
+        CELESTIAL("Celestial Pack", "W", new String[]{"Angel", "Archon", "Spirit", "Cleric", "Faerie"}, new String[]{"gain life", "lifelink"}),
+        HIVE("Hive Pack", "G", new String[]{"Insect", "Bee"}, new String[]{"Insect token", "flying"}),
+        GOLEM("Golem Pack", "W", new String[]{"Golem", "Construct", "Assembly-Worker", "Myr"}, new String[]{"artifact creature"}),
+        PIGLIN("Piglin Pack", "R", new String[]{"Boar", "Goblin", "Orc", "Berserker"}, new String[]{"Treasure token", "gold"}),
+        INFERNO("Inferno Pack", "R", new String[]{"Elemental", "Phoenix", "Salamander", "Efreet"}, new String[]{"damage to any target"}),
+        SOUL("Soul Valley Pack", "BU", new String[]{"Spirit", "Specter", "Shade", "Wraith"}, new String[]{"exile target card from a graveyard"}),
+        SLIME("Slime Pack", "G", new String[]{"Ooze"}, new String[]{"+1/+1 counter", "proliferate"}),
+        MONUMENT("Monument Pack", "U", new String[]{"Fish", "Serpent", "Leviathan", "Wall"}, new String[]{"tap target creature", "doesn't untap"}),
+        FROST("Frost Pack", "UW", new String[]{"Yeti", "Bear", "Giant"}, new String[]{"snow", "freeze", "doesn't untap"}),
+        DESERT("Desert Pack", "WR", new String[]{"Mummy", "Camel", "Jackal", "Scorpion", "Snake", "Sphinx", "Djinn", "Nomad"}, new String[]{"desert", "exert"}),
+        JUNGLE("Jungle Pack", "G", new String[]{"Cat", "Ape", "Monkey", "Bird", "Dinosaur", "Panda"}, new String[]{"explore"}),
+        SWAMP("Swamp Pack", "BG", new String[]{"Frog", "Leech", "Horror", "Lizard"}, new String[]{"swampwalk"}),
+        WILD("Wild Pack", "RG", new String[]{"Wolf", "Fox", "Werewolf", "Bear"}, new String[]{"fights"}),
+        FARM("Farm Pack", "GW", new String[]{"Ox", "Boar", "Sheep", "Bird", "Peasant", "Rabbit"}, new String[]{"Food token"}),
+        STABLE("Stable Pack", "W", new String[]{"Horse", "Unicorn", "Knight", "Pegasus"}, new String[]{"vigilance"}),
+        CAVE("Deep Cave Pack", "BR", new String[]{"Dwarf", "Kobold", "Gnome", "Bat", "Mole"}, new String[]{"Cave"}),
+        ANCIENT("Ancient Pack", "G", new String[]{"Dinosaur", "Turtle", "Plant", "Treefolk"}, new String[]{"fossil", "discover"}),
+        MUSHROOM("Mushroom Pack", "BG", new String[]{"Fungus", "Saproling"}, new String[]{"Saproling token"}),
+        END_CITY("End City Pack", "UW", new String[]{"Construct", "Shapeshifter", "Illusion"}, new String[]{"phase out", "exile it, then return"}),
+        ARCHER("Archer Pack", "WG", new String[]{"Archer", "Skeleton", "Ranger"}, new String[]{"reach"}),
+
+        // ---- All the Mods 9 add-on: only drop and show up when their mod is installed
+        TWILIGHT("Twilight Forest Pack", "GU", new String[]{"Elf", "Faerie", "Treefolk", "Dryad"}, new String[]{"flash"}, "twilightforest"),
+        NAGA("Naga Pack", "BG", new String[]{"Naga", "Snake", "Serpent"}, new String[]{"deathtouch"}, "twilightforest"),
+        HYDRA("Hydra Pack", "RG", new String[]{"Hydra"}, new String[]{"X +1/+1 counters"}, "twilightforest"),
+        CATACLYSM("Cataclysm Pack", "BR", new String[]{"Golem", "Construct", "Elemental", "Demon"}, new String[]{"destroy all"}, "cataclysm"),
+        ABYSS("Abyss Pack", "UB", new String[]{"Leviathan", "Kraken", "Horror", "Octopus"}, new String[]{"draw a card"}, "cataclysm", "aquamirae"),
+        WILDLIFE("Wildlife Pack", "GR", new String[]{"Ape", "Elephant", "Crocodile", "Hippo", "Rhino", "Snake", "Lizard", "Kangaroo", "Bird"}, new String[]{"trample"}, "alexsmobs"),
+        MOWZIE("Mowzie's Pack", "RW", new String[]{"Warrior", "Shaman", "Giant"}, new String[]{"double strike"}, "mowziesmobs"),
+        ARCANE("Arcane Pack", "U", new String[]{"Wizard", "Faerie", "Spirit"}, new String[]{"instant or sorcery"}, "ars_nouveau"),
+        MANA("Mana Pack", "GW", new String[]{"Faerie", "Dryad", "Elemental"}, new String[]{"add one mana"}, "botania"),
+        UNDERGARDEN("Undergarden Pack", "BG", new String[]{"Fungus", "Horror", "Kobold"}, new String[]{"mill"}, "undergarden"),
+        OTHERSIDE("Otherside Pack", "B", new String[]{"Horror", "Shade", "Nightmare"}, new String[]{"can't block"}, "deeperdarker"),
+        OCCULT("Occult Pack", "BR", new String[]{"Demon", "Djinn", "Efreet", "Cleric"}, new String[]{"sacrifice a creature", "pay life"}, "occultism", "bloodmagic"),
+        CHAOS("Chaos Pack", "BR", new String[]{"Scarecrow", "Zombie", "Horror", "Spirit"}, new String[]{"each opponent loses"}, "born_in_chaos_v1"),
+        SPELLBOOK("Spellbook Pack", "UR", new String[]{"Wizard", "Warlock", "Shaman"}, new String[]{"magecraft", "copy target instant"}, "irons_spellbooks"),
+        STARBOUND("Starbound Pack", "UW", new String[]{"Alien", "Construct", "Robot"}, new String[]{"Spacecraft", "Planet"}, "ad_astra"),
+        CHAMPION("Champion Pack", "RW", new String[]{"Knight", "Soldier", "Warrior"}, new String[]{"Equip"}, "apotheosis"),
+        DRAGONFIRE("Dragonfire Pack", "R", new String[]{"Dragon", "Wyvern", "Hydra", "Gorgon", "Cyclops"}, new String[]{}, "iceandfire"),
+        AETHER("Aether Pack", "W", new String[]{"Angel", "Bird", "Pegasus", "Spirit"}, new String[]{"flying"}, "aether"),
+        SKIES("Skies Pack", "UW", new String[]{"Spirit", "Elemental", "Bird"}, new String[]{"flying"}, "blue_skies"),
+        ALLTHEMODIUM("Allthemodium Pack", "BR", new String[]{"Golem", "Demon", "Dragon"}, new String[]{"indestructible"}, "allthemodium");
 
         public final String label;
         final String colors;
         final String[] types;
         final String[] hints;
+        /** For add-on themes: the mods that bring the mobs (any one is enough). Null for vanilla themes. */
+        public final String[] mod;
 
-        Theme(String label, String colors, String[] types, String[] hints) {
+        Theme(String label, String colors, String[] types, String[] hints, String... mods) {
             this.label = label;
             this.colors = colors;
             this.types = types;
             this.hints = hints;
+            this.mod = mods.length == 0 ? null : mods;
+        }
+
+        /** Whether this theme is in play: vanilla themes always are; add-on themes when one of their mods is installed. */
+        public boolean available() {
+            if (mod == null) return true;
+            for (String m : mod) if (net.minecraftforge.fml.ModList.get() != null && net.minecraftforge.fml.ModList.get().isLoaded(m)) return true;
+            return false;
+        }
+
+        /** "For <mod>" note for add-on packs' tooltips. */
+        public String modName() {
+            return mod == null ? "" : "All the Mods add-on (" + String.join(", ", mod) + ")";
         }
 
         public boolean isBox() {
@@ -161,6 +220,13 @@ public final class Packs {
     }
 
     /** Every card that fits a theme, grouped by rarity. Built once per theme (a scan of the unique cards). */
+    /** Cards per rarity in a theme's pool (common, uncommon, rare, mythic), for the dev harness. */
+    public static int[] poolSizes(Theme theme) {
+        Map<CardRarity, List<PaperCard>> p = pool(theme);
+        return new int[]{p.get(CardRarity.Common).size(), p.get(CardRarity.Uncommon).size(), p.get(CardRarity.Rare).size(),
+                p.get(CardRarity.MythicRare).size()};
+    }
+
     private static synchronized Map<CardRarity, List<PaperCard>> pool(Theme theme) {
         Map<CardRarity, List<PaperCard>> cached = POOLS.get(theme);
         if (cached != null) return cached;

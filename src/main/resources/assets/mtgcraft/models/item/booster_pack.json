@@ -409,6 +409,246 @@
     "mtgcraft:theme": 0.13
    },
    "model": "mtgcraft:item/pack_wither"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.14
+   },
+   "model": "mtgcraft:item/pack_celestial"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.15
+   },
+   "model": "mtgcraft:item/pack_hive"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.16
+   },
+   "model": "mtgcraft:item/pack_golem"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.17
+   },
+   "model": "mtgcraft:item/pack_piglin"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.18
+   },
+   "model": "mtgcraft:item/pack_inferno"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.19
+   },
+   "model": "mtgcraft:item/pack_soul"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.2
+   },
+   "model": "mtgcraft:item/pack_slime"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.21
+   },
+   "model": "mtgcraft:item/pack_monument"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.22
+   },
+   "model": "mtgcraft:item/pack_frost"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.23
+   },
+   "model": "mtgcraft:item/pack_desert"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.24
+   },
+   "model": "mtgcraft:item/pack_jungle"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.25
+   },
+   "model": "mtgcraft:item/pack_swamp"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.26
+   },
+   "model": "mtgcraft:item/pack_wild"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.27
+   },
+   "model": "mtgcraft:item/pack_farm"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.28
+   },
+   "model": "mtgcraft:item/pack_stable"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.29
+   },
+   "model": "mtgcraft:item/pack_cave"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.3
+   },
+   "model": "mtgcraft:item/pack_ancient"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.31
+   },
+   "model": "mtgcraft:item/pack_mushroom"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.32
+   },
+   "model": "mtgcraft:item/pack_end_city"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.33
+   },
+   "model": "mtgcraft:item/pack_archer"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.34
+   },
+   "model": "mtgcraft:item/pack_twilight"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.35
+   },
+   "model": "mtgcraft:item/pack_naga"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.36
+   },
+   "model": "mtgcraft:item/pack_hydra"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.37
+   },
+   "model": "mtgcraft:item/pack_cataclysm"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.38
+   },
+   "model": "mtgcraft:item/pack_abyss"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.39
+   },
+   "model": "mtgcraft:item/pack_wildlife"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.4
+   },
+   "model": "mtgcraft:item/pack_mowzie"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.41
+   },
+   "model": "mtgcraft:item/pack_arcane"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.42
+   },
+   "model": "mtgcraft:item/pack_mana"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.43
+   },
+   "model": "mtgcraft:item/pack_undergarden"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.44
+   },
+   "model": "mtgcraft:item/pack_otherside"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.45
+   },
+   "model": "mtgcraft:item/pack_occult"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.46
+   },
+   "model": "mtgcraft:item/pack_chaos"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.47
+   },
+   "model": "mtgcraft:item/pack_spellbook"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.48
+   },
+   "model": "mtgcraft:item/pack_starbound"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.49
+   },
+   "model": "mtgcraft:item/pack_champion"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.5
+   },
+   "model": "mtgcraft:item/pack_dragonfire"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.51
+   },
+   "model": "mtgcraft:item/pack_aether"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.52
+   },
+   "model": "mtgcraft:item/pack_skies"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.53
+   },
+   "model": "mtgcraft:item/pack_allthemodium"
   }
  ]
 }

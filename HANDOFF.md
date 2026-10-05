@@ -126,6 +126,20 @@ challenges the player with a spider jockey and a zombie; the client screenshots 
 - Creative-only Win button (`Packets.CheatWin`, opponents to 0 life). Gauntlet kept on death like the Deck Box.
 - Deck box models closed (no see-through gaps).
 
+## Session 7 (2026-10-05, cloud): packs, booster picks, phase stops (v0.2.4)
+- 40 new pack themes appended to `Packs.Theme` (never reorder: saved packs and item-model predicates use the
+  order). 20 vanilla (Celestial for allays/vexes/phantoms, Hive, Golem, Piglin, ... Archer) and 20 All the Mods
+  add-on themes with `mods` ids; `Theme.available()` hides them unless one of the mods is loaded.
+  `MobThemes.theme` maps vanilla mobs by exact id, ATM mods by namespace, then falls back to name words.
+  Art: `tools/make_pack_art.py` (ICONS/WRAP) + `tools/make_3d_models.py` (THEMES list = enum order). After running
+  them, `git checkout` the changed existing textures (the user edits art by hand).
+- Real set boosters: 10% per beaten mob in duels (config duelSetPackChance), wandering traders and librarians
+  sell them (BoosterTrades, config boosterTrades). Booster Pick tickets (`PackItem.ticket`, tag Pick=PACK/BOX)
+  from bosses (35% / 4%): right-click opens `client/SetPickerScreen`, `Packets.PickSet` redeems.
+- Phase stops: click the phase bar in a duel to skip phases; client config skipPhases (bitmask) goes with
+  `Packets.AutoPassPref` and `AutoPass` feeds Card-Forge's own `YieldController.setSkipPhase`. Net VERSION 4.
+- Harness: `-PdevPools` (pool sizes per theme), `-PdevPicker`, `-PdevSkip`.
+
 ## Next tasks, in the order the user asked
 0. **ATM10 version** (Minecraft 1.21.1 / NeoForge): the user asked for a separate build.
 1. **Yu-Gi-Oh style 3D field** (`client/ArenaRenderer`); the user's latest request. They want:

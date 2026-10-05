@@ -17,24 +17,119 @@ public final class MobThemes {
 
     public static Theme theme(Entity e) {
         String id = id(e.getType());
+        int colon = id.indexOf(':');
+        String ns = colon < 0 ? "" : id.substring(0, colon), path = id.substring(colon + 1);
+        // Vanilla mobs promoted to elites or bosses by other mods (Apotheosis and the like) carry Champion packs.
+        if (!isBoss(e) && marked(e) != null && Theme.CHAMPION.available()) return Theme.CHAMPION;
+        if (ns.equals("minecraft")) {
+            Theme exact = VANILLA.get(path);
+            if (exact != null) return exact;
+        } else {
+            Theme modded = modded(ns, path);
+            if (modded != null && modded.available()) return modded;
+        }
+        // Everything else (and modded mobs from other mods) by what the name suggests.
         if (id.contains("ender_dragon")) return Theme.ENDER_DRAGON;
         if (id.contains("wither_skeleton")) return Theme.UNDEAD;
         if (id.contains("wither")) return Theme.WITHER;
         if (id.contains("warden") || id.contains("sculk")) return Theme.SCULK;
+        if (has(id, "angel", "seraph", "valkyrie", "fairy", "pixie", "spirit")) return Theme.CELESTIAL;
         if (has(id, "drowned", "guardian", "squid", "dolphin", "axolotl", "fish", "turtle", "shark", "crab")) return Theme.OCEAN;
-        if (has(id, "zombie", "skeleton", "husk", "stray", "phantom", "ghost", "lich", "wraith", "mummy")) return Theme.UNDEAD;
-        if (has(id, "spider", "silverfish", "bat", "rat")) return Theme.NIGHT;
+        if (has(id, "skeleton", "archer")) return Theme.ARCHER;
+        if (has(id, "zombie", "husk", "stray", "ghost", "lich", "wraith", "mummy")) return Theme.UNDEAD;
+        if (has(id, "spider", "bat", "rat")) return Theme.NIGHT;
         if (id.contains("creeper")) return Theme.CREEPER;
-        if (has(id, "enderman", "endermite", "shulker", "end_")) return Theme.END;
-        if (has(id, "blaze", "ghast", "piglin", "hoglin", "zoglin", "magma", "strider", "nether")) return Theme.NETHER;
+        if (has(id, "enderman", "endermite", "end_")) return Theme.END;
+        if (has(id, "piglin", "hoglin", "pig")) return Theme.PIGLIN;
+        if (has(id, "blaze", "fire", "flame", "magma")) return Theme.INFERNO;
+        if (has(id, "ghast", "nether")) return Theme.NETHER;
+        if (has(id, "slime", "ooze")) return Theme.SLIME;
+        if (has(id, "bee", "wasp", "hornet")) return Theme.HIVE;
+        if (has(id, "golem", "construct", "robot")) return Theme.GOLEM;
+        if (has(id, "frost", "ice", "snow", "yeti", "penguin")) return Theme.FROST;
+        if (has(id, "mushroom", "fung", "shroom")) return Theme.MUSHROOM;
+        if (has(id, "horse", "deer", "moose")) return Theme.STABLE;
+        if (has(id, "wolf", "fox", "bear", "boar")) return Theme.WILD;
+        if (has(id, "dino", "raptor", "rex", "fossil")) return Theme.ANCIENT;
         if (id.contains("witch")) return Theme.WITCH;
-        if (has(id, "pillager", "vindicator", "evoker", "ravager", "illusioner", "vex", "illager")) return Theme.RAID;
-        if (has(id, "villager", "golem", "trader")) return Theme.VILLAGE;
+        if (has(id, "pillager", "vindicator", "evoker", "ravager", "illusioner", "illager", "bandit", "pirate")) return Theme.RAID;
+        if (has(id, "villager", "trader")) return Theme.VILLAGE;
         if (e instanceof Enemy) {
-            Theme[] dark = {Theme.UNDEAD, Theme.NIGHT, Theme.NETHER, Theme.WITCH};
+            Theme[] dark = {Theme.UNDEAD, Theme.NIGHT, Theme.NETHER, Theme.WITCH, Theme.CAVE, Theme.SOUL};
             return dark[Math.floorMod(id.hashCode(), dark.length)];
         }
         return Theme.OVERWORLD;
+    }
+
+    /** Vanilla mobs by their exact id. */
+    private static final java.util.Map<String, Theme> VANILLA = new java.util.HashMap<>();
+
+    private static void map(Theme t, String... paths) {
+        for (String p : paths) VANILLA.put(p, t);
+    }
+
+    static {
+        map(Theme.CELESTIAL, "allay", "vex", "phantom");
+        map(Theme.HIVE, "bee");
+        map(Theme.GOLEM, "iron_golem");
+        map(Theme.PIGLIN, "piglin", "piglin_brute", "hoglin", "zoglin", "zombified_piglin");
+        map(Theme.INFERNO, "blaze", "magma_cube");
+        map(Theme.SOUL, "ghast");
+        map(Theme.NETHER, "strider");
+        map(Theme.SLIME, "slime");
+        map(Theme.MONUMENT, "guardian", "elder_guardian");
+        map(Theme.FROST, "stray", "polar_bear", "snow_golem", "goat");
+        map(Theme.DESERT, "husk", "camel");
+        map(Theme.JUNGLE, "ocelot", "parrot", "panda");
+        map(Theme.SWAMP, "frog", "tadpole");
+        map(Theme.WILD, "wolf", "fox");
+        map(Theme.FARM, "cow", "pig", "chicken", "sheep");
+        map(Theme.STABLE, "horse", "donkey", "mule", "llama", "trader_llama", "skeleton_horse", "zombie_horse");
+        map(Theme.CAVE, "cave_spider", "silverfish", "glow_squid", "bat");
+        map(Theme.ANCIENT, "sniffer", "turtle", "armadillo");
+        map(Theme.MUSHROOM, "mooshroom");
+        map(Theme.END_CITY, "shulker");
+        map(Theme.ARCHER, "skeleton");
+        map(Theme.UNDEAD, "zombie", "zombie_villager", "wither_skeleton", "drowned");
+        map(Theme.OCEAN, "squid", "dolphin", "axolotl", "cod", "salmon", "pufferfish", "tropical_fish");
+        map(Theme.NIGHT, "spider", "endermite");
+        map(Theme.END, "enderman");
+        map(Theme.CREEPER, "creeper");
+        map(Theme.WITCH, "witch");
+        map(Theme.RAID, "pillager", "vindicator", "evoker", "ravager", "illusioner");
+        map(Theme.VILLAGE, "villager", "wandering_trader", "cat");
+        map(Theme.SCULK, "warden");
+        map(Theme.WITHER, "wither");
+        map(Theme.ENDER_DRAGON, "ender_dragon");
+        map(Theme.OVERWORLD, "rabbit");
+    }
+
+    /** All the Mods mobs: each mod gets its own pack (only when installed, see {@link Theme#available()}). */
+    private static Theme modded(String ns, String path) {
+        return switch (ns) {
+            case "twilightforest" -> path.contains("naga") ? Theme.NAGA
+                    : path.contains("hydra") ? Theme.HYDRA
+                    : has(path, "snow", "yeti", "ice", "winter") ? Theme.FROST
+                    : has(path, "lich", "wraith", "skeleton", "phantom") ? Theme.UNDEAD
+                    : Theme.TWILIGHT;
+            case "cataclysm" -> has(path, "leviathan", "deepling", "coral", "lionfish", "abyss", "scylla") ? Theme.ABYSS : Theme.CATACLYSM;
+            case "aquamirae" -> Theme.ABYSS;
+            case "alexsmobs" -> Theme.WILDLIFE;
+            case "mowziesmobs" -> Theme.MOWZIE;
+            case "ars_nouveau" -> Theme.ARCANE;
+            case "botania" -> Theme.MANA;
+            case "undergarden" -> Theme.UNDERGARDEN;
+            case "deeperdarker" -> Theme.OTHERSIDE;
+            case "occultism", "bloodmagic" -> Theme.OCCULT;
+            case "born_in_chaos_v1" -> Theme.CHAOS;
+            case "irons_spellbooks" -> Theme.SPELLBOOK;
+            case "ad_astra" -> Theme.STARBOUND;
+            case "iceandfire" -> Theme.DRAGONFIRE;
+            case "aether" -> Theme.AETHER;
+            case "blue_skies" -> Theme.SKIES;
+            case "allthemodium" -> Theme.ALLTHEMODIUM;
+            default -> null;
+        };
     }
 
     /** How many themed packs its sealed-style deck is built from: more packs, better picks. */

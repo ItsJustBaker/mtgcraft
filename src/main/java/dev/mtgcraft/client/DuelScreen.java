@@ -210,7 +210,14 @@ public class DuelScreen extends Screen {
     @Override
     public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
         try {
+            phaseTip = null;
             renderFrame(g, mouseX, mouseY);
+            if (phaseTip != null) {
+                boolean skipped = (skipPhases() & (1 << phaseTip[2])) != 0;
+                g.renderTooltip(font, List.of(Component.literal(PHASE_LONG[phaseTip[2]]),
+                        Component.literal(skipped ? "Skipped - click to stop here" : "Click to skip this phase").withStyle(net.minecraft.ChatFormatting.GRAY)),
+                        java.util.Optional.empty(), phaseTip[0], phaseTip[1]);
+            }
         } catch (RuntimeException e) {
             // Game state arrives from another thread (or the network) and can be briefly incomplete.
             // Skip this frame instead of crashing the game; log each distinct problem once.
@@ -1392,7 +1399,7 @@ public class DuelScreen extends Screen {
         } else {
             drawPill(g, view, opp, x, oppPillY, w, mx, my);
         }
-        drawPhases(g, view, x, oppPillY + 39, w);
+        drawPhases(g, view, x, oppPillY + 39, w, mx, my);
 
         if (zoomH == 0) {
             // no zoom panel on small screens
@@ -1730,27 +1737,59 @@ public class DuelScreen extends Screen {
         return new int[]{untapped, total};
     }
 
-    private static final PhaseType[][] PHASES = {
-            {PhaseType.UNTAP, PhaseType.UPKEEP}, {PhaseType.DRAW}, {PhaseType.MAIN1}, {PhaseType.COMBAT_BEGIN},
-            {PhaseType.COMBAT_DECLARE_ATTACKERS}, {PhaseType.COMBAT_DECLARE_BLOCKERS},
-            {PhaseType.COMBAT_FIRST_STRIKE_DAMAGE, PhaseType.COMBAT_DAMAGE, PhaseType.COMBAT_END},
-            {PhaseType.MAIN2}, {PhaseType.END_OF_TURN, PhaseType.CLEANUP}};
+    private static final PhaseType[][] PHASES = dev.mtgcraft.engine.net.AutoPass.SEGMENTS;
     private static final String[] PHASE_NAMES = {"UP", "DR", "M1", "BC", "ATK", "BLK", "DMG", "M2", "END"};
+    private static final String[] PHASE_LONG = {"Upkeep", "Draw", "Main phase 1", "Beginning of combat", "Attacks",
+            "Blocks", "Combat damage", "Main phase 2", "End of turn"};
 
-    private void drawPhases(GuiGraphics g, GameView view, int x, int y, int w) {
+    /**
+     * The phase bar. Click a phase to make the game skip it for you (dimmed, crossed out) or stop there again;
+     * skipped phases still stop when something is on the stack.
+     */
+    private void drawPhases(GuiGraphics g, GameView view, int x, int y, int w, int mx, int my) {
         PhaseType now = view.getPhase();
+        int skips = skipPhases();
         float seg = w / (float) PHASES.length;
         for (int i = 0; i < PHASES.length; i++) {
             boolean active = false;
             for (PhaseType t : PHASES[i]) if (t == now) active = true;
-            int sx = (int) (x + i * seg);
-            Theme.rounded(g, sx, y, (int) seg - 1, 11, active ? Theme.GOLD : 0x40FFFFFF);
+            boolean skipped = (skips & (1 << i)) != 0;
+            int sx = (int) (x + i * seg), sw = (int) seg - 1;
+            boolean hover = in(mx, my, sx, y, sw, 11);
+            int bg = active ? Theme.GOLD : skipped ? 0x18FFFFFF : hover ? 0x70FFFFFF : 0x40FFFFFF;
+            Theme.rounded(g, sx, y, sw, 11, bg);
             g.pose().pushPose();
             g.pose().translate(sx + seg / 2f, y + 2.5f, 0);
             float fit = Math.min(0.7f, (seg - 3) / Math.max(1f, font.width(PHASE_NAMES[i])));
             g.pose().scale(fit, fit, 1);
-            g.drawCenteredString(font, PHASE_NAMES[i], 0, 0, active ? 0xFF201808 : Theme.MUTED);
+            int col = active ? 0xFF201808 : skipped ? 0x80A0A0A0 : Theme.MUTED;
+            g.drawCenteredString(font, PHASE_NAMES[i], 0, 0, col);
             g.pose().popPose();
+            if (skipped) g.fill(sx + 2, y + 5, sx + sw - 2, y + 6, active ? 0xC0201808 : 0x90E05050);
+            final int bit = 1 << i, idx = i;
+            hits.add(new Hit(sx, y, sw, 11, () -> {
+                int next = skipPhases() ^ bit;
+                try {
+                    dev.mtgcraft.MtgClientConfig.SKIP_PHASES.set(next);
+                } catch (IllegalStateException notLoaded) {
+                    return;
+                }
+                ClientTables.sendAutoPass();
+                Theme.click();
+                info((next & bit) != 0 ? "Skipping " + PHASE_LONG[idx] + ": the game passes there for you (unless something is on the stack). Click again to stop there."
+                        : "Stopping at " + PHASE_LONG[idx] + " again.");
+            }));
+            if (hover) phaseTip = new int[]{mx, my, i};
+        }
+    }
+
+    private int[] phaseTip;
+
+    private static int skipPhases() {
+        try {
+            return dev.mtgcraft.MtgClientConfig.SKIP_PHASES.get();
+        } catch (IllegalStateException notLoaded) {
+            return 0;
         }
     }
 

@@ -3,6 +3,7 @@ package dev.mtgcraft.engine.net;
 import forge.ai.ComputerUtilCost;
 import forge.ai.ComputerUtilMana;
 import forge.game.card.Card;
+import forge.game.phase.PhaseType;
 import forge.game.player.Player;
 import forge.game.spellability.SpellAbility;
 import forge.game.zone.ZoneType;
@@ -46,9 +47,55 @@ public final class AutoPass {
         return player == null || !OFF.contains(player);
     }
 
+    /**
+     * The phase bar's segments, in the order the client sends them as bits. A player can mark segments to skip: the
+     * game then passes there for them (on every player's turn) unless something is on the stack.
+     */
+    public static final PhaseType[][] SEGMENTS = {
+            {PhaseType.UNTAP, PhaseType.UPKEEP}, {PhaseType.DRAW}, {PhaseType.MAIN1}, {PhaseType.COMBAT_BEGIN},
+            {PhaseType.COMBAT_DECLARE_ATTACKERS}, {PhaseType.COMBAT_DECLARE_BLOCKERS},
+            {PhaseType.COMBAT_FIRST_STRIKE_DAMAGE, PhaseType.COMBAT_DAMAGE, PhaseType.COMBAT_END},
+            {PhaseType.MAIN2}, {PhaseType.END_OF_TURN, PhaseType.CLEANUP}};
+    private static final java.util.Map<java.util.UUID, Integer> SKIPS = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** Which phase-bar segments a player skips (bit i = {@link #SEGMENTS}[i]). */
+    public static void setSkips(java.util.UUID player, int mask) {
+        if (mask == 0) SKIPS.remove(player);
+        else SKIPS.put(player, mask);
+    }
+
+    /** Hands the player's skipped phases to Card-Forge, which then passes there without asking. */
+    private static void applySkips(PlayerControllerHuman controller, java.util.UUID player) {
+        int mask = player == null ? 0 : SKIPS.getOrDefault(player, 0);
+        var yields = controller.getYieldController();
+        if (yields == null) return;
+        for (Player turn : controller.getGame().getPlayers()) {
+            for (int i = 0; i < SEGMENTS.length; i++) {
+                boolean skip = (mask & (1 << i)) != 0;
+                for (PhaseType ph : SEGMENTS[i]) {
+                    if (yields.isSkippingPhase(turn.getView(), ph) != skip) yields.setSkipPhase(turn.getView(), ph, skip);
+                }
+            }
+        }
+    }
+
     /** Called when a prompt is shown to the player behind {@code controller}. */
     public static void onPrompt(PlayerControllerHuman controller, java.util.UUID player) {
-        if (controller == null || !enabled(player)) return;
+        if (controller == null) return;
+        try {
+            applySkips(controller, player);
+        } catch (RuntimeException ignored) {
+            // the game is shutting down; nothing to skip
+        }
+        if (Boolean.getBoolean("mtgcraft.devDuel")) {
+            try {
+                System.out.println("[MTGCraft dev] prompt at " + controller.getGame().getPhaseHandler().getPhase()
+                        + " turn of " + controller.getGame().getPhaseHandler().getPlayerTurn());
+            } catch (RuntimeException ignored) {
+                // no game yet
+            }
+        }
+        if (!enabled(player)) return;
         Input input = controller.getInputQueue().getInput();
         if (!(input instanceof InputPassPriority)) return;
         boolean moves;

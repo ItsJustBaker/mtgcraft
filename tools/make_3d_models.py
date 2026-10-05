@@ -15,7 +15,12 @@ import make_pack_art as art  # noqa: E402  (reuses ICONS / WRAP / icon())
 TEX = 'src/main/resources/assets/mtgcraft/textures/item'
 MOD = 'src/main/resources/assets/mtgcraft/models/item'
 THEMES = ['OVERWORLD', 'CREEPER', 'UNDEAD', 'NIGHT', 'NETHER', 'END', 'OCEAN', 'VILLAGE', 'RAID', 'WITCH', 'SCULK',
-          'ENDER_DRAGON', 'WITHER']  # Packs.Theme order
+          'ENDER_DRAGON', 'WITHER',
+          'CELESTIAL', 'HIVE', 'GOLEM', 'PIGLIN', 'INFERNO', 'SOUL', 'SLIME', 'MONUMENT', 'FROST', 'DESERT', 'JUNGLE',
+          'SWAMP', 'WILD', 'FARM', 'STABLE', 'CAVE', 'ANCIENT', 'MUSHROOM', 'END_CITY', 'ARCHER',
+          'TWILIGHT', 'NAGA', 'HYDRA', 'CATACLYSM', 'ABYSS', 'WILDLIFE', 'MOWZIE', 'ARCANE', 'MANA', 'UNDERGARDEN',
+          'OTHERSIDE', 'OCCULT', 'CHAOS', 'SPELLBOOK', 'STARBOUND', 'CHAMPION', 'DRAGONFIRE', 'AETHER', 'SKIES',
+          'ALLTHEMODIUM']  # Packs.Theme order
 
 
 def box_textures(name):

@@ -291,6 +291,246 @@
     "mtgcraft:theme": 0.13
    },
    "model": "mtgcraft:item/box_wither"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.14
+   },
+   "model": "mtgcraft:item/box_celestial"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.15
+   },
+   "model": "mtgcraft:item/box_hive"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.16
+   },
+   "model": "mtgcraft:item/box_golem"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.17
+   },
+   "model": "mtgcraft:item/box_piglin"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.18
+   },
+   "model": "mtgcraft:item/box_inferno"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.19
+   },
+   "model": "mtgcraft:item/box_soul"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.2
+   },
+   "model": "mtgcraft:item/box_slime"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.21
+   },
+   "model": "mtgcraft:item/box_monument"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.22
+   },
+   "model": "mtgcraft:item/box_frost"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.23
+   },
+   "model": "mtgcraft:item/box_desert"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.24
+   },
+   "model": "mtgcraft:item/box_jungle"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.25
+   },
+   "model": "mtgcraft:item/box_swamp"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.26
+   },
+   "model": "mtgcraft:item/box_wild"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.27
+   },
+   "model": "mtgcraft:item/box_farm"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.28
+   },
+   "model": "mtgcraft:item/box_stable"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.29
+   },
+   "model": "mtgcraft:item/box_cave"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.3
+   },
+   "model": "mtgcraft:item/box_ancient"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.31
+   },
+   "model": "mtgcraft:item/box_mushroom"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.32
+   },
+   "model": "mtgcraft:item/box_end_city"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.33
+   },
+   "model": "mtgcraft:item/box_archer"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.34
+   },
+   "model": "mtgcraft:item/box_twilight"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.35
+   },
+   "model": "mtgcraft:item/box_naga"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.36
+   },
+   "model": "mtgcraft:item/box_hydra"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.37
+   },
+   "model": "mtgcraft:item/box_cataclysm"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.38
+   },
+   "model": "mtgcraft:item/box_abyss"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.39
+   },
+   "model": "mtgcraft:item/box_wildlife"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.4
+   },
+   "model": "mtgcraft:item/box_mowzie"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.41
+   },
+   "model": "mtgcraft:item/box_arcane"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.42
+   },
+   "model": "mtgcraft:item/box_mana"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.43
+   },
+   "model": "mtgcraft:item/box_undergarden"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.44
+   },
+   "model": "mtgcraft:item/box_otherside"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.45
+   },
+   "model": "mtgcraft:item/box_occult"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.46
+   },
+   "model": "mtgcraft:item/box_chaos"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.47
+   },
+   "model": "mtgcraft:item/box_spellbook"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.48
+   },
+   "model": "mtgcraft:item/box_starbound"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.49
+   },
+   "model": "mtgcraft:item/box_champion"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.5
+   },
+   "model": "mtgcraft:item/box_dragonfire"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.51
+   },
+   "model": "mtgcraft:item/box_aether"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.52
+   },
+   "model": "mtgcraft:item/box_skies"
+  },
+  {
+   "predicate": {
+    "mtgcraft:theme": 0.53
+   },
+   "model": "mtgcraft:item/box_allthemodium"
   }
  ]
 }
