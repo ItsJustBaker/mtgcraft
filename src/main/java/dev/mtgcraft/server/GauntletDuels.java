@@ -490,18 +490,32 @@ public final class GauntletDuels {
                 p.teleportTo(d.level, x, c.y, z, yaw, 32);
                 d.spots.put(p.getUUID(), new Vec3(x, c.y, z));
             } else {
+                // Flyers hover above the floor instead of sinking into it: the dragon well above, others a little.
+                double lift = hoverHeight(e);
                 d.hadNoGravity.put(e.getUUID(), e.isNoGravity());
                 e.setNoGravity(true);
                 for (Entity rider : e.getIndirectPassengers()) {
                     d.hadNoGravity.put(rider.getUUID(), rider.isNoGravity());
                     rider.setNoGravity(true);
                 }
-                e.moveTo(x, c.y, z, yaw, 0);
+                e.moveTo(x, c.y + lift, z, yaw, 0);
+                e.setXRot(0);
                 e.setYHeadRot(yaw);
                 e.setYBodyRot(yaw);
-                d.spots.put(e.getUUID(), new Vec3(x, c.y, z));
+                d.spots.put(e.getUUID(), new Vec3(x, c.y + lift, z));
             }
         }
+    }
+
+    /** How high above the stage floor a mob floats: flyers hover, the Ender Dragon (whose body hangs low) most. */
+    private static double hoverHeight(Entity e) {
+        if (e instanceof net.minecraft.world.entity.boss.enderdragon.EnderDragon) return 5;
+        if (e instanceof net.minecraft.world.entity.boss.wither.WitherBoss) return 1.5;
+        if (e instanceof net.minecraft.world.entity.FlyingMob || e instanceof net.minecraft.world.entity.animal.FlyingAnimal
+                || e instanceof net.minecraft.world.entity.ambient.AmbientCreature || e.isNoGravity()) {
+            return 1;
+        }
+        return 0;
     }
 
     /** Whether an entity this tall fits at this spot (nothing solid at its feet or head). */
@@ -931,10 +945,28 @@ public final class GauntletDuels {
                 if (d.forfeited.contains(id)) continue;
                 ServerPlayer p = DuelHosting.online(d.level.getServer(), id);
                 Vec3 spot = d.spots.get(id);
-                if (p != null && p.isAlive() && p.level() == d.level && spot != null && p.position().distanceToSqr(spot) > 0.36) {
-                    // No flying off: back onto the podium (looking where they were looking).
-                    p.teleportTo(d.level, spot.x, spot.y, spot.z, p.getYRot(), p.getXRot());
-                    p.setDeltaMovement(Vec3.ZERO);
+                if (p != null && p.isAlive() && p.level() == d.level && spot != null) {
+                    if (d.boss) {
+                        // Boss arenas are big: walk around the stage, but stay on its floor and inside the barrier.
+                        Vec3 pos = p.position();
+                        double dx = pos.x - d.center.x, dz = pos.z - d.center.z, dist = Math.sqrt(dx * dx + dz * dz);
+                        double max = Math.max(1, d.radius - 0.6);
+                        double nx = pos.x, nz = pos.z;
+                        boolean fix = Math.abs(pos.y - spot.y) > 0.25;
+                        if (dist > max) {
+                            nx = d.center.x + dx / dist * max;
+                            nz = d.center.z + dz / dist * max;
+                            fix = true;
+                        }
+                        if (fix) {
+                            p.teleportTo(d.level, nx, spot.y, nz, p.getYRot(), p.getXRot());
+                            p.setDeltaMovement(Vec3.ZERO);
+                        }
+                    } else if (p.position().distanceToSqr(spot) > 0.36) {
+                        // No flying off: back onto the podium (looking where they were looking).
+                        p.teleportTo(d.level, spot.x, spot.y, spot.z, p.getYRot(), p.getXRot());
+                        p.setDeltaMovement(Vec3.ZERO);
+                    }
                 }
                 if (p == null || !p.isAlive() || p.level() != d.level || p.position().distanceTo(d.center) > d.radius * 4) {
                     // Walked away, died or left: that's a forfeit.
