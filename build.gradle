@@ -84,6 +84,8 @@ minecraft {
             // -PdevPicker opens a Booster Pick ticket instead of a duel; -PdevSkip skips upkeep and draw.
             if (project.hasProperty('devPicker')) property 'mtgcraft.devPicker', 'true'
             if (project.hasProperty('devSkip')) property 'mtgcraft.devSkip', 'true'
+            if (project.hasProperty('devTribes')) property 'mtgcraft.devTribes', 'true'
+            if (project.hasProperty('devStarter')) property 'mtgcraft.devStarter', 'true'
             if (project.hasProperty('devWin')) property 'mtgcraft.devWin', 'true'
             if (project.hasProperty('devLose')) property 'mtgcraft.devLose', 'true'
 

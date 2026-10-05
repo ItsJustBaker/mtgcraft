@@ -28,7 +28,7 @@ import java.util.Map;
 @Mod.EventBusSubscriber(modid = MtgCraft.MODID)
 public final class DevDuel {
     private static final boolean ON = Boolean.getBoolean("mtgcraft.devDuel");
-    private static boolean started, poolsReported;
+    private static boolean started, poolsReported, tribesReported;
     private static int ticks;
 
     private DevDuel() {}
@@ -47,12 +47,34 @@ public final class DevDuel {
                         + " pack=" + Packs.openTheme(t).size() + " deck=" + deck + " available=" + t.available());
             }
         }
+        if (Boolean.getBoolean("mtgcraft.devTribes") && !tribesReported) {
+            // -PdevTribes: how many creatures of the type end up in each creature-type deck.
+            tribesReported = true;
+            for (String[] t : dev.mtgcraft.engine.Tribal.TRIBES) {
+                var d60 = dev.mtgcraft.engine.Tribal.deck(t[1], false);
+                var d100 = dev.mtgcraft.engine.Tribal.commanderDeck(t[1], false);
+                System.out.println("[MTGCraft dev] tribe " + t[0] + ": 60-card " + d60.getMain().countAll() + " cards, "
+                        + typed(d60, t[1]) + " " + t[1] + "s | commander " + d100.getName() + " " + (d100.getMain().countAll()
+                        + (d100.has(forge.deck.DeckSection.Commander) ? d100.get(forge.deck.DeckSection.Commander).countAll() : 0))
+                        + " cards, " + typed(d100, t[1]) + " " + t[1] + "s");
+            }
+        }
         for (ServerPlayer p : event.getServer().getPlayerList().getPlayers()) {
             if (!TableSessions.isReady(p.getUUID())) continue;
             started = true;
             // -Dmtgcraft.devLose keeps survival so the loss penalty can be checked.
             if (!Boolean.getBoolean("mtgcraft.devLose")) p.setGameMode(GameType.CREATIVE);
             p.serverLevel().setDayTime(1000);
+            if (Boolean.getBoolean("mtgcraft.devStarter")) {
+                // Leave the player to the starter screen; also crack a set box to count its packs.
+                p.setItemInHand(net.minecraft.world.InteractionHand.MAIN_HAND, dev.mtgcraft.item.BoxItem.ofSet("DFT"));
+                p.setGameMode(GameType.SURVIVAL);
+                p.getMainHandItem().use(p.level(), p, net.minecraft.world.InteractionHand.MAIN_HAND);
+                int packs = 0;
+                for (var st : p.getInventory().items) if (st.is(MtgCraft.BOOSTER_PACK.get())) packs += st.getCount();
+                System.out.println("[MTGCraft dev] box gave " + packs + " packs");
+                return;
+            }
             if (Boolean.getBoolean("mtgcraft.devPicker")) {
                 p.setItemInHand(net.minecraft.world.InteractionHand.MAIN_HAND, dev.mtgcraft.item.PackItem.ticket(false));
                 p.getMainHandItem().use(p.level(), p, net.minecraft.world.InteractionHand.MAIN_HAND);
@@ -87,5 +109,11 @@ public final class DevDuel {
             GauntletDuels.challenge(p, skeleton);
             return;
         }
+    }
+
+    private static int typed(forge.deck.Deck d, String type) {
+        int n = 0;
+        for (var e : d.getMain()) if (e.getKey().getRules().getType().hasCreatureType(type)) n += e.getValue();
+        return n;
     }
 }

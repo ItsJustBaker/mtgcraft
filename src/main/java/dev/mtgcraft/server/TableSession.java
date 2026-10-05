@@ -64,6 +64,7 @@ final class TableSession {
             case COLORS -> c.colors().isEmpty() ? "Random colours" : String.join("/", c.colors()) + " (generated)";
             case PRECON -> c.name() == null ? "Random precon" : c.name();
             case THEME -> "Themed deck";
+            case TRIBE -> dev.mtgcraft.engine.Tribal.label(c.name()) + " deck";
             case CMD_PRECON -> c.name() == null ? "Random commander deck" : c.name();
             case USER -> c.name();
             case INLINE -> {

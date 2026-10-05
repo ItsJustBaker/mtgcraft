@@ -22,7 +22,7 @@ import java.util.function.Consumer;
  * because the game runs on the server and can't read this computer's files.
  */
 public class DeckPickerScreen extends Screen {
-    private static final String[] TABS = {"Colours", "Precons", "My decks", "Commander"};
+    private static final String[] TABS = {"Colours", "Precons", "My decks", "Commander", "Types"};
     private static final int ROW_H = 11;
     // Remembered between visits.
     private static int tab;
@@ -30,6 +30,7 @@ public class DeckPickerScreen extends Screen {
     private static String precon;
     private static String user;
     private static String cmdPrecon; // null = random commander deck
+    private static String tribe = "Angel";
 
     private final Screen parent;
     private final Consumer<DeckChoice> onPick;
@@ -77,6 +78,7 @@ public class DeckPickerScreen extends Screen {
         switch (tab) {
             case 1 -> choice = DeckChoice.precon(precon);
             case 3 -> choice = DeckChoice.commanderPrecon(cmdPrecon);
+            case 4 -> choice = DeckChoice.tribe(tribe);
             case 2 -> {
                 if (user == null) {
                     setStatus("Pick one of your decks first.", Theme.RED);
@@ -123,8 +125,8 @@ public class DeckPickerScreen extends Screen {
         Theme.drawFelt(g, width, height);
         Theme.panel(g, px, py, pw, ph);
         g.drawCenteredString(font, title, width / 2, py + 8, Theme.GOLD);
-        int tw = (pw - 26) / 4;
-        for (int i = 0; i < 4; i++) {
+        int tw = (pw - 28) / 5;
+        for (int i = 0; i < 5; i++) {
             boolean enabled = i != 2 || allowOwn;
             Theme.button(g, font, TABS[i], px + 10 + i * (tw + 2), py + 24, tw, 14, mx, my, enabled, tab == i);
         }
@@ -141,6 +143,20 @@ public class DeckPickerScreen extends Screen {
                 for (int i = 0; i < lines.size(); i++) g.drawString(font, lines.get(i), x, py + 80 + i * 10, Theme.MUTED);
             }
             case 1 -> drawList(g, x, w, filtered(precons), precon, "Random precon", mx, my);
+            case 4 -> {
+                g.drawString(font, "What do you want to play?", x, py + 46, Theme.MUTED, false);
+                String[][] tribes = dev.mtgcraft.engine.Tribal.TRIBES;
+                int cols = 4, cw = (w - (cols - 1) * 3) / cols;
+                for (int i = 0; i < tribes.length; i++) {
+                    int bx = x + (i % cols) * (cw + 3), by = py + 58 + (i / cols) * 17;
+                    Theme.button(g, font, tribes[i][0], bx, by, cw, 14, mx, my, true, tribes[i][1].equals(tribe));
+                }
+                int ty = py + 58 + ((tribes.length + cols - 1) / cols) * 17 + 2;
+                List<FormattedCharSequence> lines = font.split(Component.literal(
+                        "A deck full of " + dev.mtgcraft.engine.Tribal.label(tribe).toLowerCase(Locale.ROOT)
+                                + ". In Commander games, one of them leads it."), w);
+                for (int i = 0; i < lines.size(); i++) g.drawString(font, lines.get(i), x, ty + i * 10, Theme.MUTED, false);
+            }
             case 3 -> drawList(g, x, w, filtered(cmdPrecons), cmdPrecon, "Random commander deck", mx, my);
             case 2 -> {
                 if (userDecks.isEmpty()) {
@@ -199,8 +215,8 @@ public class DeckPickerScreen extends Screen {
     @Override
     public boolean mouseClicked(double mx, double my, int button) {
         int x = px + 10, w = pw - 20;
-        int tw = (pw - 26) / 4;
-        for (int i = 0; i < 4; i++) {
+        int tw = (pw - 28) / 5;
+        for (int i = 0; i < 5; i++) {
             if (in(mx, my, px + 10 + i * (tw + 2), py + 24, tw, 14) && (i != 2 || allowOwn)) {
                 tab = i;
                 scroll = 0;
@@ -222,6 +238,17 @@ public class DeckPickerScreen extends Screen {
                 }
             }
         }
+        if (tab == 4) {
+            String[][] tribes = dev.mtgcraft.engine.Tribal.TRIBES;
+            int cols = 4, cw = (w - (cols - 1) * 3) / cols;
+            for (int i = 0; i < tribes.length; i++) {
+                if (in(mx, my, x + (i % cols) * (cw + 3), py + 58 + (i / cols) * 17, cw, 14)) {
+                    tribe = tribes[i][1];
+                    Theme.click();
+                    return true;
+                }
+            }
+        }
         if (tab == 2) {
             int by = py + ph - 52, bw = (w - 4) / 2;
             if (in(mx, my, x, by, bw, 16)) {
@@ -237,7 +264,7 @@ public class DeckPickerScreen extends Screen {
                 return true;
             }
         }
-        if (tab >= 1 && in(mx, my, x, listTop(), w, listBottom() - listTop())) {
+        if (tab >= 1 && tab <= 3 && in(mx, my, x, listTop(), w, listBottom() - listTop())) {
             int idx = (int) ((my - listTop() - 2) / ROW_H) + scroll;
             if (tab == 1) {
                 List<String> items = filtered(precons);

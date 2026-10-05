@@ -122,7 +122,7 @@ public class MtgGameTests {
     public static void starterKit(GameTestHelper h) {
         h.assertTrue(engineReady(), "card engine not ready");
         ServerPlayer[] p = {player(h)};
-        StarterKits.choose(p[0], 2);
+        StarterKits.choose(p[0], 6, "");
         h.succeedWhen(() -> {
             ItemStack box = ItemStack.EMPTY;
             for (ItemStack s : p[0].getInventory().items) if (s.is(MtgCraft.DECK_BOX.get())) box = s;

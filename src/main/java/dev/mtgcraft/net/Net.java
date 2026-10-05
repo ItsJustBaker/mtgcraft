@@ -10,7 +10,7 @@ import net.minecraftforge.network.simple.SimpleChannel;
 
 /** The mod's network channel. Packet handling lives in {@link Packets}. */
 public final class Net {
-    private static final String VERSION = "4";
+    private static final String VERSION = "5";
 
     public static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(
             new ResourceLocation(MtgCraft.MODID, "main"), () -> VERSION, VERSION::equals, VERSION::equals);

@@ -113,8 +113,13 @@ public final class ClientTables {
             sentReady = true;
             // The Boosters tab can now list every set: rebuild it.
             if (mc.player != null && mc.level != null) {
-                dev.mtgcraft.MtgCraft.BOOSTERS_TAB.get().buildContents(new net.minecraft.world.item.CreativeModeTab.ItemDisplayParameters(
-                        mc.player.connection.enabledFeatures(), mc.player.canUseGameMasterBlocks(), mc.level.registryAccess()));
+                var params = new net.minecraft.world.item.CreativeModeTab.ItemDisplayParameters(
+                        mc.player.connection.enabledFeatures(), mc.player.canUseGameMasterBlocks(), mc.level.registryAccess());
+                dev.mtgcraft.MtgCraft.BOOSTERS_TAB.get().buildContents(params);
+                dev.mtgcraft.MtgCraft.TAB.get().buildContents(params);
+                // The creative search was indexed before the sets (and their names) were known: index it again so
+                // searching "Aetherdrift" finds its booster.
+                net.minecraft.world.item.CreativeModeTabs.searchTab().buildContents(params);
             }
         }
     }

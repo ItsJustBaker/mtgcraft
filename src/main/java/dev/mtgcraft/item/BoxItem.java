@@ -3,7 +3,6 @@ package dev.mtgcraft.item;
 import dev.mtgcraft.MtgCraft;
 import dev.mtgcraft.engine.Packs;
 import net.minecraft.ChatFormatting;
-import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
@@ -18,15 +17,13 @@ import net.minecraft.world.level.Level;
 import java.util.List;
 
 /**
- * A sealed booster box. Right-click to crack it: a real set's box holds 36 packs (like the real thing), a themed
- * or boss box 12.
+ * A sealed booster box. Right-click to crack it: every box holds 16 packs.
  */
 public class BoxItem extends Item {
-    public static final int PACKS = 12;
-    public static final int SET_PACKS = 36;
+    public static final int PACKS = 16;
 
     private static int packs(ItemStack stack) {
-        return PackItem.set(stack) != null ? SET_PACKS : PACKS;
+        return PACKS;
     }
 
     public BoxItem(Properties props) {
@@ -65,12 +62,14 @@ public class BoxItem extends Item {
     public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
         ItemStack stack = player.getItemInHand(hand);
         if (level.isClientSide) return InteractionResultHolder.success(stack);
-        CompoundTag tag = stack.getTag();
         int count = packs(stack);
         ItemStack packs = new ItemStack(MtgCraft.BOOSTER_PACK.get(), count);
-        if (tag != null) packs.setTag(tag.copy());
+        // Only the theme or set carries over (not the box's stack size, name or other extras).
+        if (PackItem.theme(stack) != null) packs.getOrCreateTag().putString(PackItem.TAG_THEME, PackItem.theme(stack).name());
+        else if (PackItem.set(stack) != null) packs.getOrCreateTag().putString(PackItem.TAG_SET, PackItem.set(stack));
         if (!player.getAbilities().instabuild) stack.shrink(1);
-        if (!player.getInventory().add(packs)) player.drop(packs, false);
+        // Into the inventory, the rest at the player's feet (never lost when the inventory is full).
+        net.minecraftforge.items.ItemHandlerHelper.giveItemToPlayer(player, packs);
         level.playSound(null, player.blockPosition(), SoundEvents.CHEST_OPEN, SoundSource.PLAYERS, 1f, 1.2f);
         player.displayClientMessage(Component.literal("Cracked open a box: " + count + " packs!").withStyle(ChatFormatting.GOLD), true);
         return InteractionResultHolder.consume(stack);

@@ -12,7 +12,7 @@ import java.util.function.Predicate;
 
 /** One side's deck pick in the lobby: generated from colours, a preconstructed deck, or the player's own. */
 public record DeckChoice(Kind kind, List<String> colors, String name) {
-    public enum Kind { COLORS, PRECON, USER, INLINE, THEME, CMD_PRECON }
+    public enum Kind { COLORS, PRECON, USER, INLINE, THEME, CMD_PRECON, TRIBE }
 
     public static DeckChoice colors(List<String> colors) { return new DeckChoice(Kind.COLORS, List.copyOf(colors), null); }
     public static DeckChoice precon(String name) { return new DeckChoice(Kind.PRECON, List.of(), name); }
@@ -27,6 +27,9 @@ public record DeckChoice(Kind kind, List<String> colors, String name) {
     public static DeckChoice theme(Packs.Theme theme, int packs, boolean commander) {
         return new DeckChoice(Kind.THEME, commander ? List.of(String.valueOf(packs), "C") : List.of(String.valueOf(packs)), theme.name());
     }
+
+    /** A deck around a creature type (see {@link Tribal#TRIBES}); a Commander deck in Commander games. */
+    public static DeckChoice tribe(String type) { return new DeckChoice(Kind.TRIBE, List.of(), type); }
 
     /** Builds the deck. Runs on the engine thread; a null precon name means a random one. */
     Deck build(boolean forAi) throws Exception {
@@ -48,6 +51,9 @@ public record DeckChoice(Kind kind, List<String> colors, String name) {
             case CMD_PRECON -> {
                 if (name == null) return DeckgenUtil.generateCommanderDeck(forAi, forge.game.GameType.Commander);
                 return Decks.commanderPrecon(name);
+            }
+            case TRIBE -> {
+                return Tribal.deck(name, forAi);
             }
             case THEME -> {
                 Packs.Theme t = Packs.Theme.valueOf(name);

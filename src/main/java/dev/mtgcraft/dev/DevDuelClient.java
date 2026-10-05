@@ -27,7 +27,7 @@ import java.util.List;
 @Mod.EventBusSubscriber(modid = MtgCraft.MODID, value = Dist.CLIENT)
 public final class DevDuelClient {
     private static final boolean ON = Boolean.getBoolean("mtgcraft.devDuel");
-    private static int ticks, shots, hidden, pickerTicks;
+    private static int ticks, shots, hidden, pickerTicks, starterTicks, starterShots;
     private static boolean skipSet;
     /** -Dmtgcraft.devArena: keep the 3D arena view and also take shots without the duel screen. */
     private static final boolean ARENA = Boolean.getBoolean("mtgcraft.devArena");
@@ -69,6 +69,32 @@ public final class DevDuelClient {
                 dev.mtgcraft.client.ClientTables.reopenAny();
             }
             return;
+        }
+        if (Boolean.getBoolean("mtgcraft.devStarter")) {
+            starterTicks++;
+            if (starterTicks == 600) {
+                var tree = mc.getSearchTree(net.minecraft.client.searchtree.SearchRegistry.CREATIVE_NAMES);
+                var hits = tree.search("aetherdrift");
+                System.out.println("[MTGCraft dev] search 'aetherdrift': " + hits.size() + " hits"
+                        + (hits.isEmpty() ? "" : " e.g. " + hits.get(0).getHoverName().getString()));
+            }
+            if (mc.screen instanceof dev.mtgcraft.client.StarterScreen starter) {
+                starterShots++;
+                // Walk the pages: start, creature types, a quiz answer, then pick Slimes.
+                int cx = starter.width / 2;
+                if (starterShots == 40) Screenshot.grab(mc.gameDirectory, "starter_1.png", mc.getMainRenderTarget(), msg -> {});
+                if (starterShots == 50) clickText(starter, "Answer 4 questions");
+                if (starterShots == 70) Screenshot.grab(mc.gameDirectory, "starter_2.png", mc.getMainRenderTarget(), msg -> {});
+                if (starterShots == 80) for (int i = 0; i < 4; i++) clickText(starter, i == 0 ? "Giant monsters" : i == 1 ? "A deep forest" : i == 2 ? "Freedom" : "A blaze");
+                if (starterShots == 100) Screenshot.grab(mc.gameDirectory, "starter_3.png", mc.getMainRenderTarget(), msg -> {});
+                if (starterShots == 110) { clickText(starter, "Start over"); clickText(starter, "Pick a creature type"); }
+                if (starterShots == 130) Screenshot.grab(mc.gameDirectory, "starter_4.png", mc.getMainRenderTarget(), msg -> {});
+                if (starterShots == 140) clickText(starter, "Slimes");
+                return;
+            }
+            if (starterShots > 0 && starterTicks % 200 == 0 && mc.player != null) {
+                for (var st : mc.player.getInventory().items) if (st.is(dev.mtgcraft.MtgCraft.DECK_BOX.get())) System.out.println("[MTGCraft dev] got " + st.getHoverName().getString());
+            }
         }
         if (mc.screen instanceof dev.mtgcraft.client.SetPickerScreen picker) {
             // -PdevPicker: shoot the picker, then pick the newest set.
@@ -181,5 +207,33 @@ public final class DevDuelClient {
             return any;
         }
         return false;
+    }
+
+    /** Clicks the starter screen button whose label is {@code text} (found by scanning the screen). */
+    private static void clickText(dev.mtgcraft.client.StarterScreen s, String text) {
+        try {
+            var m = s.getClass().getDeclaredMethod("buttons");
+            m.setAccessible(true);
+            for (Object b : (java.util.List<?>) m.invoke(s)) {
+                var rec = b.getClass();
+                java.util.function.Function<String, Object> get = n -> {
+                    try {
+                        var acc = rec.getDeclaredMethod(n);
+                        acc.setAccessible(true);
+                        return acc.invoke(b);
+                    } catch (ReflectiveOperationException e) {
+                        throw new IllegalStateException(e);
+                    }
+                };
+                if (!text.equals(get.apply("label"))) continue;
+                int x = (int) get.apply("x"), y = (int) get.apply("y");
+                s.mouseClicked(x + 2, y + 2, 0);
+                System.out.println("[MTGCraft dev] clicked " + text);
+                return;
+            }
+            System.out.println("[MTGCraft dev] no button " + text);
+        } catch (ReflectiveOperationException e) {
+            System.out.println("[MTGCraft dev] click failed: " + e);
+        }
     }
 }
