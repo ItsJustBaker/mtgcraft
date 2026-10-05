@@ -294,11 +294,13 @@ public class DuelScreen extends Screen {
         resolvePendingTarget();
         updateQueuedAttack(view, me);
         handSound(me);
+        alertSounds(view, me, req);
 
         drawMiddleLine(g);
         if (!arena) drawPiles(g, me, opp);
         drawTrayBacking(g);
         drawCombatLines(g, view, mouseX, mouseY);
+        drawAttachmentLinks(g);
         drawCards(g, now);
         drawCommanderTags(g, me);
         drawStackLabel(g, view);
@@ -314,6 +316,7 @@ public class DuelScreen extends Screen {
             drawGameOver(g, view, me, mouseX, mouseY);
         }
         CardView preview = overlay ? choiceHover : viewer ? viewerHover : hovered == null ? null : hovered.card;
+        if (!overlay && !viewer) drawHoverInfo(g, mouseX, mouseY);
         drawBigPreview(g, preview, mouseX, now);
     }
 
@@ -689,6 +692,35 @@ public class DuelScreen extends Screen {
         if (col != null && multiplayer()) return new float[]{(col.x0() + col.x1()) / 2, -p.h};
         if (!p.mine) return new float[]{boardW + 20, oppPillY};
         return new float[]{p.x, p.y + cardH * 0.4f};
+    }
+
+    private int lastTurnPlayer = Integer.MIN_VALUE, blockAlertTurn = -1;
+    private ChoiceRequest alertedRequest;
+
+    /**
+     * A chime when your turn starts, a soft close when it ends, a bell when you have blockers to declare, and a
+     * ping when the game asks you a question: the game waits for you, so you hear when it does.
+     */
+    private void alertSounds(GameView view, PlayerView me, ChoiceRequest req) {
+        PlayerView turn = view.getPlayerTurn();
+        int now = turn == null ? -1 : turn.getId();
+        if (now != lastTurnPlayer) {
+            if (lastTurnPlayer != Integer.MIN_VALUE) {
+                if (now == me.getId()) Theme.play(SoundEvents.AMETHYST_BLOCK_CHIME, 1.0f, 1.0f);
+                else if (lastTurnPlayer == me.getId()) Theme.play(SoundEvents.BOOK_PUT, 0.7f, 0.9f);
+            }
+            lastTurnPlayer = now;
+        }
+        boolean priority = duel.prompt != null && duel.prompt.startsWith("Priority");
+        if (view.getPhase() == PhaseType.COMBAT_DECLARE_BLOCKERS && now != me.getId() && !priority && duel.okEnabled
+                && defending(view, me) && blockAlertTurn != view.getTurn()) {
+            blockAlertTurn = view.getTurn();
+            Theme.play(SoundEvents.BELL_BLOCK, 1.3f, 0.8f);
+        }
+        if (req != null && req != alertedRequest) {
+            alertedRequest = req;
+            Theme.play(SoundEvents.NOTE_BLOCK_PLING.value(), 1.6f, 0.5f);
+        }
     }
 
     private void handSound(PlayerView me) {
@@ -1089,6 +1121,26 @@ public class DuelScreen extends Screen {
             cy += 11 * cs + 1;
         }
 
+        // Keywords (gained or printed) down the right edge: flying, trample, shroud...
+        List<String[]> kws = keywordChips(s);
+        float ky = y0 + 1;
+        for (int i = 0; i < kws.size(); i++) {
+            String text = i == 3 && kws.size() > 4 ? "+" + (kws.size() - 3) : kws.get(i)[0];
+            int color = i == 3 && kws.size() > 4 ? Theme.MUTED : (int) Long.parseLong(kws.get(i)[1], 16);
+            float tw = (font.width(text) + 4) * cs;
+            badge(g, text, x0 + bw - tw - 1, ky, cs, color, false);
+            ky += 11 * cs + 1;
+            if (i == 3) break;
+        }
+        // Auras and equipment attached to this card.
+        int attached = 0;
+        try {
+            for (CardView att : c.getAttachedCards()) if (att != null) attached++;
+        } catch (RuntimeException unsynced) {
+            // attachments arrive with the next sync
+        }
+        if (attached > 0) badge(g, "⛓" + attached, x0 + 1, y0 + bh - (s.isCreature() ? 0 : 0) - 11 * cs - 1, cs, 0xFFE0C070, false);
+
         // In a multiplayer game, say who each attacker is going after.
         CombatView combat = duel.getGameView() == null ? null : duel.getGameView().getCombat();
         if (multiplayer() && combat != null && combat.isAttacking(c)) {
@@ -1098,6 +1150,121 @@ public class DuelScreen extends Screen {
                 badge(g, "→ " + Theme.ellipsize(font, who, (int) (bw / cs)), x0 + 1, y0 + bh - 11 * cs - 1, cs, Theme.RED, false);
             }
         }
+        g.pose().popPose();
+    }
+
+    /** Short chip text and colour (hex ARGB) for the keywords that matter most at a glance, in a fixed order. */
+    private static final Object[][] KEYWORD_CHIPS = {
+            {forge.game.keyword.Keyword.FLYING, "Fly", "FFA8D8FF"},
+            {forge.game.keyword.Keyword.REACH, "Rch", "FF9FD49F"},
+            {forge.game.keyword.Keyword.TRAMPLE, "Trm", "FF9FE07F"},
+            {forge.game.keyword.Keyword.FIRST_STRIKE, "1st", "FFFFD27F"},
+            {forge.game.keyword.Keyword.DOUBLE_STRIKE, "2x", "FFFFB060"},
+            {forge.game.keyword.Keyword.DEATHTOUCH, "DT", "FFC890FF"},
+            {forge.game.keyword.Keyword.LIFELINK, "LL", "FFFFF0A0"},
+            {forge.game.keyword.Keyword.VIGILANCE, "Vig", "FFF0F0F0"},
+            {forge.game.keyword.Keyword.HASTE, "Hst", "FFFF8A70"},
+            {forge.game.keyword.Keyword.MENACE, "Men", "FFFF7070"},
+            {forge.game.keyword.Keyword.DEFENDER, "Def", "FFB0B0B0"},
+            {forge.game.keyword.Keyword.HEXPROOF, "Hex", "FF70C0FF"},
+            {forge.game.keyword.Keyword.SHROUD, "Shr", "FF70A0FF"},
+            {forge.game.keyword.Keyword.WARD, "Wrd", "FF80B0FF"},
+            {forge.game.keyword.Keyword.PROTECTION, "Pro", "FFFFFFFF"},
+            {forge.game.keyword.Keyword.INDESTRUCTIBLE, "Ind", "FFFFE070"},
+            {forge.game.keyword.Keyword.INFECT, "Inf", "FF90E090"},
+            {forge.game.keyword.Keyword.FLASH, "Fls", "FFC0C0FF"},
+    };
+
+    private static List<String[]> keywordChips(CardStateView s) {
+        List<String[]> out = new ArrayList<>();
+        try {
+            var kws = s.getKeywords();
+            if (kws == null || kws.isEmpty()) return out;
+            for (Object[] k : KEYWORD_CHIPS) {
+                if (kws.contains((forge.game.keyword.Keyword) k[0])) out.add(new String[]{(String) k[1], (String) k[2]});
+            }
+        } catch (RuntimeException unsynced) {
+            // keywords arrive with the next sync
+        }
+        return out;
+    }
+
+    /** Full keyword names for the hover card (everything the card has right now, not just the chips). */
+    private static List<String> keywordNames(CardStateView s) {
+        List<String> out = new ArrayList<>();
+        try {
+            var kws = s.getKeywords();
+            if (kws == null) return out;
+            Set<String> seen = new LinkedHashSet<>();
+            for (var k : kws) {
+                String t = k.title();
+                if (t == null || t.isBlank()) t = k.keyword() == null ? k.original() : k.keyword().toString();
+                if (t != null && !t.isBlank()) seen.add(t);
+            }
+            out.addAll(seen);
+        } catch (RuntimeException unsynced) {
+            // keywords arrive with the next sync
+        }
+        return out;
+    }
+
+    /**
+     * Lines from each Aura/Equipment to the permanent it's attached to, so it's clear what's on what.
+     */
+    private void drawAttachmentLinks(GuiGraphics g) {
+        for (Placed p : placed) {
+            if (p.zone != Zone.BATTLEFIELD) continue;
+            CardView host;
+            try {
+                host = p.card.getAttachedTo();
+            } catch (RuntimeException unsynced) {
+                continue;
+            }
+            if (host == null) continue;
+            Anim a = anims.get(p.card.getId()), h = anims.get(host.getId());
+            if (a == null || h == null) continue;
+            boolean focus = hovered != null && (hovered.card.getId() == p.card.getId() || hovered.card.getId() == host.getId());
+            Theme.line(g, a.x + a.w / 2, a.y + a.h / 2, h.x + h.w / 2, h.y + h.h / 2, focus ? 2.5f : 1.5f,
+                    focus ? 0xF0E0C070 : 0x80E0C070);
+        }
+    }
+
+    /** A small box beside the hovered permanent: its keywords, counters and what's attached to it. */
+    private void drawHoverInfo(GuiGraphics g, int mx, int my) {
+        if (hovered == null || hovered.zone != Zone.BATTLEFIELD || dragging || !duel.mayView(hovered.card)) return;
+        CardView c = hovered.card;
+        CardStateView s = c.getCurrentState();
+        if (s == null) return;
+        List<String> lines = new ArrayList<>();
+        List<String> kws = keywordNames(s);
+        if (!kws.isEmpty()) lines.add(String.join(", ", kws));
+        if (c.isSick()) lines.add("Summoning sick: can't attack or tap yet");
+        var counters = c.getCounters();
+        if (counters != null) {
+            for (var type : counters.elementSet()) lines.add(counters.count(type) + " " + type.getName() + " counter" + (counters.count(type) == 1 ? "" : "s"));
+        }
+        try {
+            CardView host = c.getAttachedTo();
+            if (host != null) lines.add("Attached to " + host.getName());
+            List<String> on = new ArrayList<>();
+            for (CardView att : c.getAttachedCards()) if (att != null) on.add(att.getName());
+            if (!on.isEmpty()) lines.add("Has attached: " + String.join(", ", on));
+        } catch (RuntimeException unsynced) {
+            // attachments arrive with the next sync
+        }
+        if (c.getDamage() > 0) lines.add(c.getDamage() + " damage marked");
+        if (lines.isEmpty()) return;
+        int w = 0;
+        List<FormattedCharSequence> wrapped = new ArrayList<>();
+        for (String l : lines) wrapped.addAll(font.split(Component.literal(l), 150));
+        for (FormattedCharSequence l : wrapped) w = Math.max(w, font.width(l));
+        int h = wrapped.size() * 9 + 6;
+        int x = Math.min(mx + 12, boardW - w - 10), y = Math.max(4, Math.min(my - h - 6, height - h - 4));
+        g.pose().pushPose();
+        g.pose().translate(0, 0, 260);
+        Theme.rounded(g, x - 1, y - 1, w + 10, h + 2, Theme.PANEL_EDGE);
+        Theme.rounded(g, x, y, w + 8, h, 0xF0141A16);
+        for (int i = 0; i < wrapped.size(); i++) g.drawString(font, wrapped.get(i), x + 4, y + 4 + i * 9, i == 0 && !kws.isEmpty() ? Theme.GOLD : Theme.TEXT, false);
         g.pose().popPose();
     }
 
@@ -1240,11 +1407,12 @@ public class DuelScreen extends Screen {
         Theme.button(g, font, duel.cancelLabel, x + bw + 4, buttonsY, bw, 20, mx, my, duel.cancelEnabled, false);
 
         drawPill(g, view, me, x, myPillY, w, mx, my);
+        // The concede flag sits bottom-left, under the avatar, away from the mana counter on the right.
         String flag = confirmConcede ? "Concede?" : "⚑";
         int fw = font.width(flag) + 6;
-        boolean fh = in(mx, my, x + w - fw - 2, myPillY + 21, fw, 11);
-        Theme.rounded(g, x + w - fw - 2, myPillY + 21, fw, 11, fh || confirmConcede ? 0xE0803030 : 0x60000000);
-        g.drawString(font, flag, x + w - fw + 1, myPillY + 23, Theme.TEXT, false);
+        boolean fh = in(mx, my, x + 3, myPillY + 23, fw, 11);
+        Theme.rounded(g, x + 3, myPillY + 23, fw, 11, fh || confirmConcede ? 0xF0803030 : 0x60000000);
+        g.drawString(font, flag, x + 6, myPillY + 25, Theme.TEXT, false);
     }
 
     /** Small buttons above OK: the log, the zone viewer and the 2D/3D switch. */
@@ -2167,7 +2335,7 @@ public class DuelScreen extends Screen {
             return true;
         }
         int fw = font.width(confirmConcede ? "Concede?" : "⚑") + 6;
-        if (in(mx, my, x + w - fw - 2, myPillY + 21, fw, 11)) {
+        if (in(mx, my, x + 3, myPillY + 23, fw, 11)) {
             if (confirmConcede) duel.concedeGame();
             confirmConcede = !confirmConcede;
             Theme.click();
