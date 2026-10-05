@@ -81,6 +81,7 @@ minecraft {
             if (project.hasProperty('devMob')) property 'mtgcraft.devMob', project.property('devMob')
             if (project.hasProperty('devHill')) property 'mtgcraft.devHill', 'true'
             if (project.hasProperty('devWin')) property 'mtgcraft.devWin', 'true'
+            if (project.hasProperty('devLose')) property 'mtgcraft.devLose', 'true'
 
             mods {
                 "${mod_id}" {

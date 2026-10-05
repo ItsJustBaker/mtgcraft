@@ -137,7 +137,7 @@ public final class GauntletDuels {
 
     /** Mobs being killed at the end of a won duel, and the list their drops are caught into. */
     private static final Map<UUID, List<ItemStack>> CATCH = new HashMap<>();
-    /** Mobs whose XP was already handed out (the dragon drops its XP over its death animation). */
+    /** Mobs whose XP is handed out by the duel instead of dropped as orbs (the dragon, while it's being killed). */
     private static final Set<UUID> NO_XP = new HashSet<>();
 
     /** Catches the normal drops of mobs that lost a duel, after every mod has added its loot. */
@@ -153,10 +153,7 @@ public final class GauntletDuels {
 
     @SubscribeEvent
     public static void catchXp(net.minecraftforge.event.entity.living.LivingExperienceDropEvent event) {
-        if (NO_XP.contains(event.getEntity().getUUID())) {
-            event.setDroppedExperience(0);
-            if (!event.getEntity().isAlive() && event.getEntity().isRemoved()) NO_XP.remove(event.getEntity().getUUID());
-        }
+        if (NO_XP.contains(event.getEntity().getUUID())) event.setDroppedExperience(0);
     }
 
     /** Players just out of a duel, with the tick their safe time ends: mobs leave them alone until then. */
@@ -330,7 +327,8 @@ public final class GauntletDuels {
 
         Duel d = new Duel();
         d.level = player.serverLevel();
-        d.boss = MobThemes.isBoss(target) || MobThemes.isBoss(mount(target));
+        // A boss anywhere in the ride stack (a boss rider on its mount) makes it a boss duel, whichever was clicked.
+        d.boss = group(mount(target)).stream().anyMatch(MobThemes::isBoss);
         d.radius = d.boss ? 7.5f : 5f;
         d.teamName = teamName;
 
@@ -685,7 +683,12 @@ public final class GauntletDuels {
         for (UUID id : d.players.keySet()) BY_PLAYER.remove(id);
         for (Mob m : d.everyone) {
             Boolean grav = d.hadNoGravity.get(m.getUUID());
-            if (grav != null && m.isAlive()) m.setNoGravity(grav);
+            if (grav != null && m.isAlive()) {
+                m.setNoGravity(grav);
+                // The stage can float well above the ground: drift down instead of taking fall damage.
+                m.fallDistance = 0;
+                if (!grav) m.addEffect(new net.minecraft.world.effect.MobEffectInstance(net.minecraft.world.effect.MobEffects.SLOW_FALLING, 200, 0, false, false));
+            }
         }
         for (Map.Entry<UUID, boolean[]> f : d.hadFlight.entrySet()) {
             ServerPlayer p = DuelHosting.online(d.level.getServer(), f.getKey());
@@ -756,6 +759,7 @@ public final class GauntletDuels {
                 m.hurt(credit != null ? credit.damageSources().playerAttack(credit) : m.damageSources().magic(), Float.MAX_VALUE);
                 if (m.isAlive()) m.kill();
                 CATCH.remove(m.getUUID());
+                NO_XP.remove(m.getUUID());
             }
             // Everyone who fought gets their own pack rewards; the mobs' drops are dealt out between them and the XP
             // split evenly. It all goes straight into the inventory, and the rewards screen shows what they got.
@@ -782,6 +786,9 @@ public final class GauntletDuels {
         }
         Mob victor = d.mobs.isEmpty() ? null : d.mobs.get(0);
         for (ServerPlayer p : online) {
+            // The safe time would cancel the penalty itself (the hit comes from the mob): lift it for the hit, and
+            // give it back to anyone who survives it.
+            Long safeUntil = GRACE.remove(p.getUUID());
             switch (MtgConfig.LOSS_PENALTY.get()) {
                 case DEATH -> {
                     tell(p, "You lost the duel...");
@@ -793,6 +800,7 @@ public final class GauntletDuels {
                 }
                 case NONE -> tell(p, "You lost the duel.");
             }
+            if (p.isAlive() && safeUntil != null) GRACE.put(p.getUUID(), safeUntil);
         }
     }
 
@@ -1100,7 +1108,20 @@ public final class GauntletDuels {
     @SubscribeEvent
     public static void loggedOut(PlayerEvent.PlayerLoggedOutEvent event) {
         Duel d = BY_PLAYER.get(event.getEntity().getUUID());
-        if (d != null) d.forfeit(event.getEntity().getUUID());
+        if (d == null) return;
+        // They're saved right after this: give their flight back and let them drift down from the stage when they
+        // come back, instead of falling when they rejoin mid-air.
+        if (event.getEntity() instanceof ServerPlayer p) {
+            boolean[] f = d.hadFlight.remove(p.getUUID());
+            if (f != null) {
+                p.getAbilities().mayfly = f[0] || p.isCreative() || p.isSpectator();
+                p.getAbilities().flying = f[1] && p.getAbilities().mayfly;
+                p.onUpdateAbilities();
+            }
+            p.fallDistance = 0;
+            p.addEffect(new net.minecraft.world.effect.MobEffectInstance(net.minecraft.world.effect.MobEffects.SLOW_FALLING, 400, 0, false, false));
+        }
+        d.forfeit(event.getEntity().getUUID());
     }
 
     @SubscribeEvent

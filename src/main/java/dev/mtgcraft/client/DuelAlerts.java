@@ -84,12 +84,15 @@ public final class DuelAlerts {
         // Cards put away (walking around the arena): say on the action bar when the game is waiting for you.
         Minecraft mc = Minecraft.getInstance();
         boolean waitingOnMe = req != null || duel.okEnabled || duel.cancelEnabled;
-        if (!(mc.screen instanceof DuelScreen) && mc.player != null && waitingOnMe) {
+        // A plain priority stop is usually auto-passed within half a second: only count it once it has really stopped.
+        if (waitingOnMe && req == null && priority && System.currentTimeMillis() - duel.promptAt < 1500) waitingOnMe = false;
+        if (!(mc.screen instanceof DuelScreen) && !DuelIntro.active() && mc.player != null && waitingOnMe) {
             if (!wasWaitingOnMe) nagTicks = 0;
             if (nagTicks++ % 40 == 0) {
                 String what = req != null ? "The duel has a question for you" : now == me.getId() ? "Your turn" : "Your move";
-                mc.player.displayClientMessage(Component.literal(what + "! Right-click the air with the Duel Gauntlet to play.")
-                        .withStyle(ChatFormatting.GOLD), true);
+                String how = ClientTables.isGauntletDuel(duel) ? "Right-click the air with the Duel Gauntlet to play."
+                        : "Right-click the Magic Table to play.";
+                mc.player.displayClientMessage(Component.literal(what + "! " + how).withStyle(ChatFormatting.GOLD), true);
             }
         }
         wasWaitingOnMe = waitingOnMe;

@@ -523,6 +523,17 @@ public final class DuelGui extends NetworkGuiGame {
     public void showPromptMessage(PlayerView playerView, String message, CardView card) {
         prompt = message == null ? "" : message;
         promptCard = card;
+        promptAt = System.currentTimeMillis();
+    }
+
+    /** When the current prompt arrived (ms), to tell a real stop from one auto-pass is about to skip. */
+    public volatile long promptAt;
+
+    /** The connection to this duel is gone (logout, disconnect): forget it here without contacting the server. */
+    public void abandon() {
+        if (active == this) active = null;
+        finished = true;
+        requests.forEach(r -> r.answer.cancel(false));
     }
 
     @Override

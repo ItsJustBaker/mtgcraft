@@ -40,7 +40,8 @@ public final class DevDuel {
         for (ServerPlayer p : event.getServer().getPlayerList().getPlayers()) {
             if (!TableSessions.isReady(p.getUUID())) continue;
             started = true;
-            p.setGameMode(GameType.CREATIVE);
+            // -Dmtgcraft.devLose keeps survival so the loss penalty can be checked.
+            if (!Boolean.getBoolean("mtgcraft.devLose")) p.setGameMode(GameType.CREATIVE);
             p.serverLevel().setDayTime(1000);
             Deck deck = Packs.themeDeck(Packs.Theme.VILLAGE, 6, "Dev deck");
             ItemStack box = new ItemStack(MtgCraft.DECK_BOX.get());

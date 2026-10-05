@@ -2587,7 +2587,6 @@ public class DuelScreen extends Screen {
     private void info(String text) {
         toastText = text;
         toastUntil = System.currentTimeMillis() + 3000;
-        Theme.click();
     }
 
     private void drawToast(GuiGraphics g) {

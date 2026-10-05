@@ -79,6 +79,11 @@ public final class DevDuelClient {
         }
         DuelGui duel = DuelGui.active();
         Screenshot.grab(mc.gameDirectory, String.format("duel_%03d.png", shots++), mc.getMainRenderTarget(), msg -> {});
+        if (Boolean.getBoolean("mtgcraft.devLose") && shots >= 10 && !winSent && duel != null && !duel.isOver()) {
+            winSent = true;
+            System.out.println("[MTGCraft dev] conceding to test the loss penalty");
+            duel.concedeGame();
+        }
         if (Boolean.getBoolean("mtgcraft.devWin") && shots >= 24 && !winSent && duel != null && !duel.isOver()
                 && duel.prompt != null && duel.prompt.startsWith("Priority")) {
             winSent = true;

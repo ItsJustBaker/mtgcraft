@@ -58,7 +58,34 @@ public class SettingsScreen extends Screen {
         };
     }
 
-    private int rowY(int i) { return py + 34 + i * 18; }
+    /** Row spacing: up to 18, tighter when the window is short, so every row and the Done button fit. */
+    private int step() {
+        int n = Math.max(1, state == null ? 1 : state.settings().size());
+        int avail = ph - 34 - 6 - 8 - 14 - 24 - 6;
+        return Math.max(14, Math.min(18, avail / (n + 3)));
+    }
+
+    private int rowY(int i) { return py + 34 + i * step(); }
+
+    /** Button height for the rows (a pixel short of the spacing so rows never touch). */
+    private int bh() { return Math.min(15, step() - 1); }
+
+    /** The personal rows' y positions: {duel intro, battlefield view, auto-pass}. */
+    private int[] clientRows() {
+        List<Packets.Setting> server = state == null ? List.of() : state.settings();
+        int n = Math.max(1, server.size());
+        int yy = rowY(n) + 6 + (state != null && !state.canEdit() ? 8 : 0);
+        int c0 = yy + 14;
+        return new int[]{c0, c0 + step(), c0 + 2 * step()};
+    }
+
+    /** Done: {x, y, w, h}. At the bottom when there's room under the rows, otherwise beside the title. */
+    private int[] done() {
+        int c2 = clientRows()[2];
+        int y = py + ph - 24;
+        if (y < c2 + 18) return new int[]{px + pw - 52, py + 4, 48, 14};
+        return new int[]{width / 2 - 40, y, 80, 18};
+    }
 
     @Override
     public void render(GuiGraphics g, int mx, int my, float partialTick) {
@@ -73,7 +100,7 @@ public class SettingsScreen extends Screen {
         for (int i = 0; i < server.size(); i++) {
             Packets.Setting s = server.get(i);
             g.drawString(font, s.label(), labelX, rowY(i) + 4, Theme.TEXT);
-            Theme.button(g, font, pretty(s.key(), s.value()), btnX, rowY(i), btnW, 15, mx, my, canEdit, false);
+            Theme.button(g, font, pretty(s.key(), s.value()), btnX, rowY(i), btnW, bh(), mx, my, canEdit, false);
         }
         int n = Math.max(1, server.size());
         int yy = rowY(n) + 6;
@@ -82,25 +109,33 @@ public class SettingsScreen extends Screen {
             yy += 8;
         }
         g.drawString(font, "Just you", labelX, yy + 2, Theme.MUTED);
-        int c0 = yy + 14, c1 = c0 + 18, c2 = c1 + 18;
+        int[] rows = clientRows();
+        int c0 = rows[0], c1 = rows[1], c2 = rows[2];
         g.drawString(font, "Duel intro", labelX, c0 + 4, Theme.TEXT);
-        Theme.button(g, font, MtgClientConfig.DUEL_INTRO.get() ? "On" : "Off", btnX, c0, btnW, 15, mx, my, true, false);
+        Theme.button(g, font, MtgClientConfig.DUEL_INTRO.get() ? "On" : "Off", btnX, c0, btnW, bh(), mx, my, true, false);
         g.drawString(font, "Battlefield view", labelX, c1 + 4, Theme.TEXT);
-        Theme.button(g, font, MtgClientConfig.ARENA_VIEW.get() ? "3D arena" : "2D screen", btnX, c1, btnW, 15, mx, my, true, false);
+        Theme.button(g, font, MtgClientConfig.ARENA_VIEW.get() ? "3D arena" : "2D screen", btnX, c1, btnW, bh(), mx, my, true, false);
         g.drawString(font, "Auto-pass", labelX, c2 + 4, Theme.TEXT);
         Theme.button(g, font, MtgClientConfig.AUTO_PASS.get() ? "On (skip when nothing to play)" : "Off (always stop)",
-                btnX, c2, btnW, 15, mx, my, true, false);
-        Theme.button(g, font, "Done", width / 2 - 40, py + ph - 24, 80, 18, mx, my, true, true);
+                btnX, c2, btnW, bh(), mx, my, true, false);
+        int[] d = done();
+        Theme.button(g, font, "Done", d[0], d[1], d[2], d[3], mx, my, true, true);
     }
 
     @Override
     public boolean mouseClicked(double mx, double my, int button) {
         int btnX = px + pw / 2 - 10, btnW = pw / 2;
+        // Done first, so clicking the button you can see always closes the screen.
+        int[] d = done();
+        if (in(mx, my, d[0], d[1], d[2], d[3])) {
+            onClose();
+            return true;
+        }
         List<Packets.Setting> server = state == null ? List.of() : state.settings();
         if (state != null && state.canEdit()) {
             for (int i = 0; i < server.size(); i++) {
                 Packets.Setting s = server.get(i);
-                if (in(mx, my, btnX, rowY(i), btnW, 15)) {
+                if (in(mx, my, btnX, rowY(i), btnW, bh())) {
                     List<String> opts = s.options();
                     int at = opts.indexOf(s.value());
                     String next = opts.get(((at < 0 ? 0 : at) + (button == 1 ? opts.size() - 1 : 1)) % opts.size());
@@ -110,27 +145,22 @@ public class SettingsScreen extends Screen {
                 }
             }
         }
-        int n = Math.max(1, server.size());
-        int yy = rowY(n) + 6 + (state != null && !state.canEdit() ? 8 : 0);
-        int c0 = yy + 14, c1 = c0 + 18, c2 = c1 + 18;
-        if (in(mx, my, btnX, c2, btnW, 15)) {
+        int[] rows = clientRows();
+        int c0 = rows[0], c1 = rows[1], c2 = rows[2];
+        if (in(mx, my, btnX, c2, btnW, bh())) {
             MtgClientConfig.AUTO_PASS.set(!MtgClientConfig.AUTO_PASS.get());
             ClientTables.sendAutoPass();
             Theme.click();
             return true;
         }
-        if (in(mx, my, btnX, c0, btnW, 15)) {
+        if (in(mx, my, btnX, c0, btnW, bh())) {
             MtgClientConfig.DUEL_INTRO.set(!MtgClientConfig.DUEL_INTRO.get());
             Theme.click();
             return true;
         }
-        if (in(mx, my, btnX, c1, btnW, 15)) {
+        if (in(mx, my, btnX, c1, btnW, bh())) {
             MtgClientConfig.ARENA_VIEW.set(!MtgClientConfig.ARENA_VIEW.get());
             Theme.click();
-            return true;
-        }
-        if (in(mx, my, width / 2 - 40, py + ph - 24, 80, 18)) {
-            onClose();
             return true;
         }
         return super.mouseClicked(mx, my, button);
