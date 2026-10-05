@@ -151,7 +151,7 @@ public class TableScreen extends Screen {
             boolean typeClickable = host && !mine;
             Theme.button(g, font, type, c[0], y + 1, c[1], 15, mx, my, typeClickable || mine, mine || (!s.ai() && !s.open()));
 
-            String name = mode() == MatchSetup.Mode.ARCHENEMY && i == 0 ? "★ " + s.name() : s.name();
+            String name = mode().isArchenemy() && i == 0 ? "★ " + s.name() : s.name();
             int nameColor = s.open() ? Theme.MUTED : Theme.TEXT;
             g.drawString(font, Theme.ellipsize(font, name, c[3] - 10), c[2], y + 5, nameColor);
             if (!s.ai() && !s.open()) {
@@ -162,7 +162,7 @@ public class TableScreen extends Screen {
             Theme.button(g, font, s.deck(), c[4], y + 1, c[5], 15, mx, my, deckEditable, false);
 
             if (teams) {
-                int team = mode() == MatchSetup.Mode.ARCHENEMY ? (i == 0 ? 1 : 2) : s.team();
+                int team = mode().isArchenemy() ? (i == 0 ? 1 : 2) : s.team();
                 int tc = TEAM_COLORS[Math.max(0, Math.min(TEAM_COLORS.length - 1, team))];
                 Theme.rounded(g, c[6], y + 1, c[7], 15, (tc & 0x00FFFFFF) | 0xC0000000);
                 g.drawCenteredString(font, "T" + team, c[6] + c[7] / 2, y + 5, Theme.TEXT);
@@ -235,7 +235,7 @@ public class TableScreen extends Screen {
         List<Packets.SeatView> seats = state.seats();
         UUID me = me();
         int[] c = cols();
-        boolean teams = mode().allowsTeams && mode() != MatchSetup.Mode.FREE_FOR_ALL && mode() != MatchSetup.Mode.ARCHENEMY;
+        boolean teams = mode().allowsTeams && mode() != MatchSetup.Mode.FREE_FOR_ALL && !mode().isArchenemy();
         for (int i = 0; i < seats.size(); i++) {
             Packets.SeatView s = seats.get(i);
             int y = rowY(i) + 1;

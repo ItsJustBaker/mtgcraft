@@ -104,7 +104,30 @@ challenges the player with a spider jockey and a zombie; the client screenshots 
 `run/screenshots/` and plays along (lands, a spell, attacks, default answers). Needs `run/eula.txt` and
 `online-mode=false` in `run/server.properties`. Code: `dev/DevDuel*.java`, off without the flag.
 
+## Session 6 (2026-10-05, cloud): playtest feedback round 2 (v0.2.0)
+- Auto-pass (`engine/net/AutoPass`, hooked in `RemoteSeat`): the server passes priority for a human with no
+  playable land/spell/ability they can pay for. Decisions (blocks, targets, questions) are never skipped.
+- Sounds: your turn, end of your turn, blockers to declare, a question.
+- Block checks: flying/reach, shadow, horsemanship, tapped; a block the game rejects (it flashes) is removed from
+  the planned blocks with a message; menace warns. Toasts via `DuelScreen.toast`.
+- Keyword chips, hover box (keywords, counters, attachments), lines from auras/equipment to their host.
+- Player skin / mob head portraits (`client/Heads`), pile hover highlights and captions, concede flag bottom-left.
+- Popups (`Packets.Prompt` → `client/PromptScreen`) for duel invites and join offers; team names; titles.
+- Mob tiers (`MobThemes.Tier`): critters 6 life, common 12 (quick classic duels, config quickDuels), tough = full
+  game, bosses Archenemy / Archenemy Commander (new `MatchSetup.Mode.ARCHENEMY_COMMANDER`, 60 life). Modded bosses
+  by forge:bosses tag, name list or max health >= 150.
+- Rewards per duelist (`DuelLoot.duelRewards`) into the inventory + `client/RewardsScreen`; defeated mobs drop no
+  extra packs. Safe time after duels (config graceSeconds) and mobs can't target duelists.
+- Ranged challenge: right-click the air aiming at a mob (32 blocks); PartEntity (dragon/hydra parts) → parent.
+  The Ender Dragon is held in HOVERING phase on its spot (it ignores NoAI).
+- Underground: `fitRadius` shrinks the arena to open space; duelists only move to clear spots.
+- Arena: stack floats in the centre, new permanents fly in from the centre, exile is a void vortex.
+- Binder shift+right-click files loose cards; "View card" key (Z) shows the held/hovered card big.
+- Creative-only Win button (`Packets.CheatWin`, opponents to 0 life). Gauntlet kept on death like the Deck Box.
+- Deck box models closed (no see-through gaps).
+
 ## Next tasks, in the order the user asked
+0. **ATM10 version** (Minecraft 1.21.1 / NeoForge): the user asked for a separate build.
 1. **Yu-Gi-Oh style 3D field** (`client/ArenaRenderer`); the user's latest request. They want:
    - **Cards lying flat on the floor** in glowing card zones in front of each duelist, like a Yu-Gi-Oh duel field:
      a creature row and a land/other row, each a row of zone frames.

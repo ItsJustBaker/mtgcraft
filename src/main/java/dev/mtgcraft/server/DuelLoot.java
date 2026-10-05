@@ -33,7 +33,7 @@ import java.util.UUID;
 
 /**
  * Cards in the world: mobs you beat in a duel always drop their themed pack, bosses drop their booster box, and
- * any hostile mob has a small chance to drop a pack. Your Deck Box is never lost on death.
+ * any hostile mob has a small chance to drop a pack. Your Deck Box and Duel Gauntlet are never lost on death.
  */
 @Mod.EventBusSubscriber(modid = MtgCraft.MODID)
 public final class DuelLoot {
@@ -56,9 +56,8 @@ public final class DuelLoot {
         List<ItemStack> loot = new ArrayList<>();
         boolean boss = MobThemes.isBoss(e);
         if (GauntletDuels.DEFEATED.remove(e.getUUID())) {
-            loot.add(PackItem.themed(theme, 1));
-            if (boss) loot.add(bossBox(theme));
-            else if (RNG.nextFloat() < 0.25f) loot.add(PackItem.themed(theme, 1));
+            // Beaten in a duel: the duelists already got their rewards (see duelRewards).
+            return;
         } else if (boss) {
             loot.add(bossBox(theme));
         } else if (e instanceof Enemy) {
@@ -73,6 +72,36 @@ public final class DuelLoot {
         }
     }
 
+    /**
+     * One duelist's rewards for beating these mobs: a themed pack per opponent, an extra one for tough mobs, a
+     * booster box for a boss, and sometimes a bonus pack. Every player who fought gets their own set.
+     */
+    public static List<ItemStack> duelRewards(List<? extends LivingEntity> beaten, boolean boss) {
+        List<ItemStack> loot = new ArrayList<>();
+        if (ForgeEngine.state() != ForgeEngine.State.READY) return loot;
+        for (LivingEntity m : beaten) {
+            Packs.Theme theme = MobThemes.theme(m);
+            MobThemes.Tier tier = MobThemes.tier(m);
+            loot.add(PackItem.themed(theme, 1));
+            if (tier == MobThemes.Tier.TOUGH) loot.add(PackItem.themed(theme, 1));
+            if (tier == MobThemes.Tier.BOSS || boss) loot.add(bossBox(theme));
+            if (RNG.nextFloat() < 0.25f) loot.add(PackItem.themed(theme, 1));
+            if (tier != MobThemes.Tier.CRITTER && RNG.nextDouble() < 0.1) {
+                String set = Packs.randomSet();
+                if (set != null) loot.add(PackItem.ofSet(set, 1));
+            }
+        }
+        // Stack identical packs together.
+        List<ItemStack> merged = new ArrayList<>();
+        for (ItemStack s : loot) {
+            ItemStack same = null;
+            for (ItemStack m : merged) if (ItemStack.isSameItemSameTags(m, s) && m.getCount() < m.getMaxStackSize()) same = m;
+            if (same != null) same.grow(s.getCount());
+            else merged.add(s.copy());
+        }
+        return merged;
+    }
+
     /** Dragon and Wither get their own boxes; other bosses drop a box of their theme. */
     private static ItemStack bossBox(Packs.Theme theme) {
         return BoxItem.themed(theme);
@@ -84,6 +113,8 @@ public final class DuelLoot {
     @SubscribeEvent
     public static void dragonDeath(LivingDeathEvent event) {
         if (!(event.getEntity() instanceof EnderDragon dragon) || !(dragon.level() instanceof ServerLevel level)) return;
+        // Beaten in a duel: the box was already handed to the duelists.
+        if (GauntletDuels.DEFEATED.remove(dragon.getUUID())) return;
         BlockPos top = level.getHeightmapPos(Heightmap.Types.MOTION_BLOCKING, BlockPos.ZERO);
         ItemEntity box = new ItemEntity(level, 0.5, top.getY() + 3, 0.5, BoxItem.themed(Packs.Theme.ENDER_DRAGON));
         box.setUnlimitedLifetime();
@@ -95,7 +126,7 @@ public final class DuelLoot {
         List<ItemStack> kept = new ArrayList<>();
         for (Iterator<ItemEntity> it = event.getDrops().iterator(); it.hasNext(); ) {
             ItemEntity drop = it.next();
-            if (drop.getItem().getItem() instanceof DeckBoxItem) {
+            if (drop.getItem().getItem() instanceof DeckBoxItem || drop.getItem().getItem() instanceof dev.mtgcraft.item.GauntletItem) {
                 kept.add(drop.getItem().copy());
                 it.remove();
             }

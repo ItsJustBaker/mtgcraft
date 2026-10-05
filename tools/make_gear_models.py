@@ -123,11 +123,13 @@ def deck_box_model(prefix):
             # the box
             box([4, 0, 5], [12, 9, 11], {
                 "north": face("#front"), "south": face("#front"),
-                "east": face("#side"), "west": face("#side"), "down": face("#side")}),
-            # the deck, peeking out above the box
+                "east": face("#side"), "west": face("#side"), "down": face("#side"),
+                "up": face("#side")}),
+            # the deck, peeking out above the box (solid, so there's nothing to see through)
             box([4.5, 9, 5.5], [11.5, 10.5, 10.5], {
                 "north": face("#cards"), "south": face("#cards"),
-                "east": face("#cards"), "west": face("#cards")}),
+                "east": face("#cards"), "west": face("#cards"),
+                "up": face("#cards"), "down": face("#cards")}),
             # the lid, slightly wider, sitting a little open
             box([3.7, 10.5, 4.7], [12.3, 13, 11.3], {
                 "north": face("#side", [0, 5, 16, 10]), "south": face("#side", [0, 5, 16, 10]),
@@ -135,7 +137,8 @@ def deck_box_model(prefix):
                 "up": face("#lid"), "down": face("#side")}),
             # a clasp on the front
             box([7.25, 7, 4.6], [8.75, 11.5, 5], {
-                "north": face("#lid", [6, 6, 10, 10]), "east": face("#lid", [6, 6, 10, 10]),
+                "north": face("#lid", [6, 6, 10, 10]), "south": face("#lid", [6, 6, 10, 10]),
+                "east": face("#lid", [6, 6, 10, 10]),
                 "west": face("#lid", [6, 6, 10, 10]), "up": face("#lid", [6, 6, 10, 10]),
                 "down": face("#lid", [6, 6, 10, 10])}),
         ],

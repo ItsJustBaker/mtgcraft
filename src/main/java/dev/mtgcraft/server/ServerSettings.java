@@ -27,6 +27,8 @@ public final class ServerSettings {
         out.add(new Packets.Setting("duelMode", "Duel rules", MtgConfig.DUEL_MODE.get().name(), List.of("COMMANDER", "CLASSIC")));
         out.add(new Packets.Setting("lossPenalty", "Losing a duel", MtgConfig.LOSS_PENALTY.get().name(), List.of("DEATH", "DAMAGE", "NONE")));
         out.add(new Packets.Setting("groupFights", "Gauntlet default", String.valueOf(MtgConfig.GROUP_FIGHTS.get()), List.of("false", "true")));
+        out.add(new Packets.Setting("quickDuels", "Quick duels vs weak mobs", String.valueOf(MtgConfig.QUICK_DUELS.get()), List.of("true", "false")));
+        out.add(new Packets.Setting("graceSeconds", "Safe time after a duel (s)", String.valueOf(MtgConfig.GRACE_SECONDS.get()), List.of("0", "5", "15", "30", "60")));
         out.add(new Packets.Setting("themedPackChance", "Themed pack drops", trim(MtgConfig.PACK_DROP_CHANCE.get()), List.of(CHANCES)));
         out.add(new Packets.Setting("setPackChance", "Set pack drops", trim(MtgConfig.SET_PACK_DROP_CHANCE.get()), List.of(CHANCES)));
         out.add(new Packets.Setting("starterKit", "Starter deck for new players", String.valueOf(MtgConfig.STARTER_KIT.get()), List.of("true", "false")));
@@ -52,6 +54,8 @@ public final class ServerSettings {
                 case "duelMode" -> MtgConfig.DUEL_MODE.set(MtgConfig.DuelMode.valueOf(value));
                 case "lossPenalty" -> MtgConfig.LOSS_PENALTY.set(MtgConfig.LossPenalty.valueOf(value));
                 case "groupFights" -> MtgConfig.GROUP_FIGHTS.set(Boolean.parseBoolean(value));
+                case "quickDuels" -> MtgConfig.QUICK_DUELS.set(Boolean.parseBoolean(value));
+                case "graceSeconds" -> MtgConfig.GRACE_SECONDS.set(Math.max(0, Math.min(120, Integer.parseInt(value))));
                 case "themedPackChance" -> MtgConfig.PACK_DROP_CHANCE.set(Math.max(0, Math.min(1, Double.parseDouble(value))));
                 case "setPackChance" -> MtgConfig.SET_PACK_DROP_CHANCE.set(Math.max(0, Math.min(1, Double.parseDouble(value))));
                 case "starterKit" -> MtgConfig.STARTER_KIT.set(Boolean.parseBoolean(value));

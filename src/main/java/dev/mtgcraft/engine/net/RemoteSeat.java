@@ -37,7 +37,14 @@ public final class RemoteSeat {
         client = new RemoteClient(tunnel.peer);
         client.setUsername(playerName);
         client.setIndex(0);
-        gui = new RemoteClientGuiGame(client);
+        gui = new RemoteClientGuiGame(client) {
+            @Override
+            public void showPromptMessage(forge.game.player.PlayerView playerView, String message, forge.game.card.CardView card) {
+                super.showPromptMessage(playerView, message, card);
+                // Nothing to do? Pass on the player's behalf instead of making them press OK.
+                if (getGameController() instanceof forge.player.PlayerControllerHuman human) AutoPass.onPrompt(human);
+            }
+        };
     }
 
     /** Bytes from this player's client. */

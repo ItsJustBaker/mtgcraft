@@ -56,7 +56,7 @@ public final class Matches {
         Map<RegisteredPlayer, IGuiGame> guiMap = new HashMap<>();
         for (int i = 0; i < n; i++) {
             MatchSetup.Seat seat = setup.seats.get(i);
-            boolean archenemy = mode == MatchSetup.Mode.ARCHENEMY && i == 0;
+            boolean archenemy = mode.isArchenemy() && i == 0;
             Deck deck = deckFor(mode, seat, archenemy);
 
             Iterable<PaperCard> schemes = null, planes = null;
@@ -67,6 +67,7 @@ public final class Matches {
                     ? new RegisteredPlayer(deck)
                     : RegisteredPlayer.forVariants(n, mode.variants, deck, schemes, archenemy, planes, (CardPool) null);
             rp.setTeamNumber(setup.effectiveTeam(i));
+            if (seat.startingLife > 0) rp.setStartingLife(seat.startingLife);
 
             LobbyPlayer lobbyPlayer = seat.ai
                     ? GamePlayerUtil.createAiPlayer(seat.name, i)

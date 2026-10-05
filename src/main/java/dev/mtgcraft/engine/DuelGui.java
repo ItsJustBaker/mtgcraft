@@ -306,6 +306,8 @@ public final class DuelGui extends NetworkGuiGame {
     @Override
     public <T> void reveal(String message, List<T> items) {
         if (items == null || items.isEmpty()) return;
+        // Card-Forge's note about cards the AI plays badly is meant for deck builders, not for the duel.
+        if (message != null && message.contains("play these cards well")) return;
         List<String> labels = new ArrayList<>();
         List<CardView> cards = new ArrayList<>();
         for (T t : items) {

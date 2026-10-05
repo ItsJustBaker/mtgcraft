@@ -67,13 +67,40 @@ public class GauntletItem extends Item {
         if (level.isClientSide) {
             net.minecraftforge.fml.DistExecutor.unsafeRunWhenOn(net.minecraftforge.api.distmarker.Dist.CLIENT,
                     () -> dev.mtgcraft.client.ClientTables::reopenAny);
+        } else if (player instanceof ServerPlayer sp && !dev.mtgcraft.server.GauntletDuels.inDuel(sp.getUUID())) {
+            // Aiming at a mob from a distance challenges it too: no need to walk into a boss's reach. Parts of
+            // big multi-part bosses (the Ender Dragon, a Hydra) count as the boss.
+            net.minecraft.world.entity.Entity aimed = aimedAt(sp, RANGE);
+            if (aimed instanceof Mob mob) dev.mtgcraft.server.GauntletDuels.challenge(sp, mob);
+            else if (aimed instanceof ServerPlayer other) dev.mtgcraft.server.GauntletDuels.invitePlayer(sp, other);
         }
         return InteractionResultHolder.sidedSuccess(player.getItemInHand(hand), level.isClientSide);
+    }
+
+    /** How far away a mob can be challenged by aiming at it. */
+    public static final double RANGE = 32;
+
+    /** The mob or player the player is looking at (not through walls), or null. */
+    public static net.minecraft.world.entity.Entity aimedAt(Player p, double range) {
+        net.minecraft.world.phys.Vec3 eye = p.getEyePosition(), look = p.getViewVector(1);
+        net.minecraft.world.phys.Vec3 end = eye.add(look.scale(range));
+        net.minecraft.world.phys.AABB box = p.getBoundingBox().expandTowards(look.scale(range)).inflate(2);
+        var hit = net.minecraft.world.entity.projectile.ProjectileUtil.getEntityHitResult(p.level(), p, eye, end, box,
+                e -> e != p && !e.isSpectator() && e.isPickable());
+        if (hit == null) return null;
+        var wall = p.level().clip(new net.minecraft.world.level.ClipContext(eye, end, net.minecraft.world.level.ClipContext.Block.COLLIDER,
+                net.minecraft.world.level.ClipContext.Fluid.NONE, p));
+        if (wall.getType() != net.minecraft.world.phys.HitResult.Type.MISS
+                && eye.distanceToSqr(wall.getLocation()) < eye.distanceToSqr(hit.getLocation())) return null;
+        net.minecraft.world.entity.Entity e = hit.getEntity();
+        if (e instanceof net.minecraftforge.entity.PartEntity<?> part) e = part.getParent();
+        return e;
     }
 
     @Override
     public void appendHoverText(ItemStack stack, Level level, List<Component> lines, TooltipFlag flag) {
         lines.add(Component.literal("Right-click a mob to challenge it").withStyle(ChatFormatting.GRAY));
+        lines.add(Component.literal("Or aim at one up to 32 blocks away and right-click").withStyle(ChatFormatting.GRAY));
         lines.add(Component.literal("Right-click a player to duel or join them").withStyle(ChatFormatting.GRAY));
         lines.add(Component.literal(groupFights(stack) ? "Mode: group fights" : "Mode: 1v1 duels").withStyle(ChatFormatting.GOLD));
         lines.add(Component.literal("Shift + right-click the air to switch").withStyle(ChatFormatting.DARK_GRAY));

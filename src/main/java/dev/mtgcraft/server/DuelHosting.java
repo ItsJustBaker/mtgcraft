@@ -135,6 +135,28 @@ public final class DuelHosting {
         }
     }
 
+    /**
+     * Creative-mode cheat: every opponent of this player drops to 0 life and the game moves on, so they win at once.
+     * Only for players in creative mode.
+     */
+    public static void cheatWin(ServerPlayer player) {
+        if (!player.isCreative()) return;
+        for (Map.Entry<Integer, UUID> e : OWNERS.entrySet()) {
+            if (!e.getValue().equals(player.getUUID())) continue;
+            RemoteSeat seat = TUNNELS.get(e.getKey());
+            if (seat == null || !(seat.gui.getGameController() instanceof forge.player.PlayerControllerHuman human)) continue;
+            dev.mtgcraft.engine.ForgeEngine.runOnUi(() -> {
+                forge.game.player.Player me = human.getPlayer();
+                for (forge.game.player.Player p : me.getGame().getPlayers()) {
+                    if (p.isOpponentOf(me) && !p.hasLost()) p.setLife(0, null);
+                }
+                if (human.getInputQueue().getInput() instanceof forge.gamemodes.match.input.InputPassPriority priority) {
+                    priority.passPriority();
+                }
+            });
+        }
+    }
+
     public static void closeAll() {
         for (RemoteSeat s : TUNNELS.values()) s.close();
         TUNNELS.clear();
