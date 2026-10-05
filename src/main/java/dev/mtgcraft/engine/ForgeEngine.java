@@ -174,7 +174,13 @@ public final class ForgeEngine {
     /** Points Card-Forge's user and cache folders inside dataDir instead of %APPDATA%/Forge. */
     private static void writeProfile(Path dataDir) throws IOException {
         String base = dataDir.toAbsolutePath().toString().replace('\\', '/');
-        Files.writeString(dataDir.resolve("forge.profile.properties"),
-                "userDir=" + base + "/user/\ncacheDir=" + base + "/cache/\n");
+        // Card-Forge reads this with Properties.load(InputStream), which decodes ISO-8859-1. Properties.store writes
+        // that encoding and escapes anything else as \\uXXXX, so a game folder like C:\\Users\\José\\... survives.
+        java.util.Properties p = new java.util.Properties();
+        p.setProperty("userDir", base + "/user/");
+        p.setProperty("cacheDir", base + "/cache/");
+        try (OutputStream o = Files.newOutputStream(dataDir.resolve("forge.profile.properties"))) {
+            p.store(o, null);
+        }
     }
 }
