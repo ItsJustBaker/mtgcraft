@@ -9,6 +9,11 @@ import forge.util.FileSection;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.charset.CharacterCodingException;
+import java.nio.charset.Charset;
+import java.nio.charset.CodingErrorAction;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -74,10 +79,11 @@ public final class Decks {
     public static Deck userDeck(String fileName) throws IOException {
         Path file = userDir().resolve(fileName);
         if (fileName.toLowerCase(Locale.ROOT).endsWith(".dck")) {
-            return DeckSerializer.fromFile(file.toFile());
+            // Read it ourselves: Card-Forge reads as UTF-8 only, and older files were saved in the Windows encoding.
+            return fromText(readText(file));
         }
         String name = fileName.replaceFirst("\\.[^.]+$", "");
-        return parse(Files.readString(file), name).deck;
+        return parse(readText(file), name).deck;
     }
 
     /** A parsed decklist plus the lines Card-Forge didn't recognise as cards it knows. */
@@ -116,18 +122,44 @@ public final class Decks {
             file = userDir().resolve(base + " " + i + ".dck");
         }
         parsed.deck.setName(file.getFileName().toString().replaceFirst("\\.dck$", ""));
-        DeckSerializer.writeDeck(parsed.deck, file.toFile());
+        Files.writeString(file, toText(parsed.deck), StandardCharsets.UTF_8);
         return parsed;
     }
 
-    /** A deck as .dck text, for sending a player's own deck to the server. */
+    /**
+     * A deck as .dck text, for sending a player's own deck to the server. Built in memory: Card-Forge's file writer
+     * uses the computer's default encoding (not UTF-8 on Windows), which broke card names like "Lim-Dûl" or "Æther"
+     * ("Couldn't read your deck: Input length = 1").
+     */
     public static String toText(Deck deck) throws IOException {
-        File tmp = File.createTempFile("mtgcraft", ".dck");
         try {
-            DeckSerializer.writeDeck(deck, tmp);
-            return Files.readString(tmp.toPath());
-        } finally {
-            tmp.delete();
+            java.lang.reflect.Method serialize = DeckSerializer.class.getDeclaredMethod("serializeDeck", Deck.class);
+            serialize.setAccessible(true);
+            @SuppressWarnings("unchecked")
+            List<String> lines = (List<String>) serialize.invoke(null, deck);
+            return String.join(System.lineSeparator(), lines) + System.lineSeparator();
+        } catch (ReflectiveOperationException | RuntimeException noSuchMethod) {
+            // A Card-Forge version without it: write a temp file and read it back in the encoding it was written in.
+            File tmp = File.createTempFile("mtgcraft", ".dck");
+            try {
+                DeckSerializer.writeDeck(deck, tmp);
+                return Files.readString(tmp.toPath(), Charset.defaultCharset());
+            } finally {
+                tmp.delete();
+            }
+        }
+    }
+
+    /** A text file as UTF-8 if it is valid UTF-8, otherwise as Windows-1252 (Notepad's old default, Card-Forge's on Windows). */
+    public static String readText(Path file) throws IOException {
+        byte[] bytes = Files.readAllBytes(file);
+        try {
+            return StandardCharsets.UTF_8.newDecoder()
+                    .onMalformedInput(CodingErrorAction.REPORT)
+                    .onUnmappableCharacter(CodingErrorAction.REPORT)
+                    .decode(ByteBuffer.wrap(bytes)).toString();
+        } catch (CharacterCodingException notUtf8) {
+            return new String(bytes, Charset.forName("windows-1252"));
         }
     }
 
