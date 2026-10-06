@@ -79,10 +79,10 @@ public class StarterScreen extends Screen {
             }
             case TYPES -> {
                 String[][] tribes = Tribal.TRIBES;
-                int cols = 4, cw = (pw - 24 - (cols - 1) * 4) / cols;
+                int cols = 5, cw = (pw - 24 - (cols - 1) * 3) / cols;
                 for (int i = 0; i < tribes.length; i++) {
                     String type = tribes[i][1];
-                    out.add(new Btn(tribes[i][0], null, px + 12 + (i % cols) * (cw + 4), top + (i / cols) * 20, cw, 16,
+                    out.add(new Btn(tribes[i][0], null, px + 12 + (i % cols) * (cw + 3), top + (i / cols) * 18, cw, 15,
                             () -> choose(0, type), 0, false));
                 }
                 back(out, px, pw);
@@ -112,7 +112,7 @@ public class StarterScreen extends Screen {
         return switch (page) {
             case START -> 148;
             case COLORS -> 34 + 5 * 26 + 30;
-            case TYPES -> 34 + 6 * 20 + 30;
+            case TYPES -> 34 + (Tribal.TRIBES.length + 4) / 5 * 18 + 30;
             case QUIZ -> 34 + 12 + 5 * 22 + 30;
             case RESULT -> 140;
         };

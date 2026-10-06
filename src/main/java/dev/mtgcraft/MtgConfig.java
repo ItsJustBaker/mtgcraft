@@ -20,6 +20,9 @@ public final class MtgConfig {
     public static final ForgeConfigSpec.BooleanValue GROUP_FIGHTS;
     public static final ForgeConfigSpec.BooleanValue QUICK_DUELS;
     public static final ForgeConfigSpec.IntValue GRACE_SECONDS;
+    public static final ForgeConfigSpec.IntValue BOSS_LIFE;
+    public static final ForgeConfigSpec.IntValue BOSS_LIFE_PER_EXTRA_PLAYER;
+    public static final ForgeConfigSpec.IntValue BOSS_SOLO_PACKS;
 
     static {
         ForgeConfigSpec.Builder b = new ForgeConfigSpec.Builder();
@@ -38,6 +41,13 @@ public final class MtgConfig {
                 .define("quickDuels", true);
         GRACE_SECONDS = b.comment("After a duel, mobs leave the duelists alone for this many seconds.")
                 .defineInRange("graceSeconds", 15, 0, 120);
+        BOSS_LIFE = b.comment("A boss's starting life when one player fights it alone.")
+                .defineInRange("bossLife", 30, 1, 200);
+        BOSS_LIFE_PER_EXTRA_PLAYER = b.comment("Extra boss life for each player beyond the first (two players: bossLife + this).")
+                .defineInRange("bossLifePerExtraPlayer", 15, 0, 100);
+        BOSS_SOLO_PACKS = b.comment("How many themed packs a boss's deck is built from when one player fights it alone (more = stronger deck).",
+                        "With two or more players the boss uses its full 12.")
+                .defineInRange("bossSoloPacks", 8, 1, 24);
         b.pop();
         b.push("drops");
         PACK_DROP_CHANCE = b.comment("Chance a hostile mob killed by a player drops a themed booster pack.")

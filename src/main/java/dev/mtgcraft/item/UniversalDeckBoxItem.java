@@ -69,6 +69,6 @@ public class UniversalDeckBoxItem extends Item {
 
     @Override
     public boolean isFoil(ItemStack stack) {
-        return choice(stack) != null;
+        return choice(stack) != null || DeckBoxItem.isActive(stack);
     }
 }

@@ -116,6 +116,8 @@ public class DuelScreen extends Screen {
     private float dragDX, dragDY, dragTilt;
     private Placed hovered;
     private CardView zoomCard;
+    /** While set, this card is drawn with its other side up (Shift on a two-sided card). */
+    private CardView showBackOf;
     private Object pendingTarget;
     private long pendingUntil;
     private boolean confirmConcede;
@@ -212,10 +214,13 @@ public class DuelScreen extends Screen {
         try {
             phaseTip = null;
             renderFrame(g, mouseX, mouseY);
+            drawTurnSignal(g);
             if (phaseTip != null) {
                 boolean skipped = (skipPhases() & (1 << phaseTip[2])) != 0;
+                boolean stopped = (stopPhases() & (1 << phaseTip[2])) != 0;
                 g.renderTooltip(font, List.of(Component.literal(PHASE_LONG[phaseTip[2]]),
-                        Component.literal(skipped ? "Skipped - click to stop here" : "Click to skip this phase").withStyle(net.minecraft.ChatFormatting.GRAY)),
+                        Component.literal(stopped ? "Always stops here - click to skip it" : skipped ? "Always skipped - click for normal"
+                                : "Auto-pass decides - click to always stop here").withStyle(net.minecraft.ChatFormatting.GRAY)),
                         java.util.Optional.empty(), phaseTip[0], phaseTip[1]);
             }
         } catch (RuntimeException e) {
@@ -1007,6 +1012,11 @@ public class DuelScreen extends Screen {
         if (combat != null && combat.isBlocking(c)) return 0xFF4FB8E0;
         if (duel.isHighlighted(c)) return 0xFF58A6FF;
         if (hovered != null && hovered.card.getId() == c.getId()) return 0xD0FFFFFF;
+        // Cards you can play right now (sent by the server at your priority): a soft green glow.
+        if (!picking() && highlightPlayable() && duel.isWeaklySelectable(c)) {
+            int pulse = (int) (140 + 90 * Math.sin(now / 240.0));
+            return (pulse << 24) | 0x4FD06A;
+        }
         return 0;
     }
 
@@ -1025,7 +1035,7 @@ public class DuelScreen extends Screen {
     }
 
     private void drawCardFace(GuiGraphics g, CardView c, float x, float y, float w, float h, float alpha, boolean forceLarge) {
-        CardStateView s = c.getCurrentState();
+        CardStateView s = c == showBackOf && c.getAlternateState() != null ? c.getAlternateState() : c.getCurrentState();
         String key = s.getImageKey(duel.getLocalPlayers());
         // Pick the texture by on-screen pixels, not GUI units, so text stays sharp at any GUI scale.
         double realH = h * minecraft.getWindow().getGuiScale();
@@ -1344,6 +1354,16 @@ public class DuelScreen extends Screen {
         int w = Math.min(rowX1 - rowX0, font.width(text) + 10);
         int cx = (rowX0 + rowX1) / 2;
         int y = (int) (midY + cardH * 0.55f + 4);
+        // The card being played, big in the middle of the board, above what it does.
+        CardView src = top.getSourceCard();
+        if (src != null && duel.mayView(src)) {
+            float ch = cardH * 1.3f, cw = ch * 0.716f;
+            g.pose().pushPose();
+            g.pose().translate(0, 0, 300);
+            Theme.rounded(g, (int) (cx - cw / 2) - 2, (int) (y - ch) - 4, (int) cw + 4, (int) ch + 4, 0xC0000000);
+            drawCardFace(g, src, cx - cw / 2, y - ch - 2, cw, ch, 1f);
+            g.pose().popPose();
+        }
         Theme.rounded(g, cx - w / 2, y, w, 12, 0xD0101010);
         g.drawCenteredString(font, Theme.ellipsize(font, text, w - 8), cx, y + 2, Theme.GOLD);
     }
@@ -1404,7 +1424,17 @@ public class DuelScreen extends Screen {
         if (zoomH == 0) {
             // no zoom panel on small screens
         } else if (zoomCard != null && duel.mayView(zoomCard)) {
+            // Two-sided cards: hold Shift to see the other side.
+            boolean twoSided = zoomCard.getAlternateState() != null;
+            if (twoSided && hasShiftDown()) showBackOf = zoomCard;
             drawCardFace(g, zoomCard, zoomX, zoomY, zoomW, zoomH, 1f);
+            showBackOf = null;
+            if (twoSided) {
+                String hint = hasShiftDown() ? "Other side" : "Hold Shift: other side";
+                int hw = font.width(hint) + 8;
+                Theme.rounded(g, zoomX + (zoomW - hw) / 2, zoomY + zoomH - 14, hw, 12, 0xD0101010);
+                g.drawCenteredString(font, hint, zoomX + zoomW / 2, zoomY + zoomH - 12, Theme.GOLD);
+            }
         } else {
             Theme.rounded(g, zoomX, zoomY, zoomW, zoomH, 0x30FFFFFF);
             g.drawCenteredString(font, "Hover a card", zoomX + zoomW / 2, zoomY + zoomH / 2 - 4, Theme.MUTED);
@@ -1748,12 +1778,12 @@ public class DuelScreen extends Screen {
      */
     private void drawPhases(GuiGraphics g, GameView view, int x, int y, int w, int mx, int my) {
         PhaseType now = view.getPhase();
-        int skips = skipPhases();
+        int skips = skipPhases(), stops = stopPhases();
         float seg = w / (float) PHASES.length;
         for (int i = 0; i < PHASES.length; i++) {
             boolean active = false;
             for (PhaseType t : PHASES[i]) if (t == now) active = true;
-            boolean skipped = (skips & (1 << i)) != 0;
+            boolean skipped = (skips & (1 << i)) != 0, stopped = (stops & (1 << i)) != 0;
             int sx = (int) (x + i * seg), sw = (int) seg - 1;
             boolean hover = in(mx, my, sx, y, sw, 11);
             int bg = active ? Theme.GOLD : skipped ? 0x18FFFFFF : hover ? 0x70FFFFFF : 0x40FFFFFF;
@@ -1766,18 +1796,33 @@ public class DuelScreen extends Screen {
             g.drawCenteredString(font, PHASE_NAMES[i], 0, 0, col);
             g.pose().popPose();
             if (skipped) g.fill(sx + 2, y + 5, sx + sw - 2, y + 6, active ? 0xC0201808 : 0x90E05050);
+            // A stop: green underline, auto-pass always stops here.
+            if (stopped) g.fill(sx + 1, y + 9, sx + sw - 1, y + 11, 0xFF4FD06A);
             final int bit = 1 << i, idx = i;
             hits.add(new Hit(sx, y, sw, 11, () -> {
-                int next = skipPhases() ^ bit;
+                // Click cycles: auto-pass decides -> always stop -> always skip -> auto-pass decides.
+                int skip = skipPhases(), stop = stopPhases();
+                String msg;
+                if ((stop & bit) != 0) {
+                    stop &= ~bit;
+                    skip |= bit;
+                    msg = "Always skipping " + PHASE_LONG[idx] + " (unless something is on the stack). Click again for normal.";
+                } else if ((skip & bit) != 0) {
+                    skip &= ~bit;
+                    msg = PHASE_LONG[idx] + ": auto-pass decides again.";
+                } else {
+                    stop |= bit;
+                    msg = "Always stopping at " + PHASE_LONG[idx] + ", even with nothing to play. Click again to skip it.";
+                }
                 try {
-                    dev.mtgcraft.MtgClientConfig.SKIP_PHASES.set(next);
+                    dev.mtgcraft.MtgClientConfig.SKIP_PHASES.set(skip);
+                    dev.mtgcraft.MtgClientConfig.STOP_PHASES.set(stop);
                 } catch (IllegalStateException notLoaded) {
                     return;
                 }
                 ClientTables.sendAutoPass();
                 Theme.click();
-                info((next & bit) != 0 ? "Skipping " + PHASE_LONG[idx] + ": the game passes there for you (unless something is on the stack). Click again to stop there."
-                        : "Stopping at " + PHASE_LONG[idx] + " again.");
+                info(msg);
             }));
             if (hover) phaseTip = new int[]{mx, my, i};
         }
@@ -1790,6 +1835,63 @@ public class DuelScreen extends Screen {
             return dev.mtgcraft.MtgClientConfig.SKIP_PHASES.get();
         } catch (IllegalStateException notLoaded) {
             return 0;
+        }
+    }
+
+    private int splashTurn = -1;
+    private long splashAt;
+
+    /**
+     * Makes it hard to miss that it's your move: a big "YOUR TURN" splash when your turn starts, and a pulsing gold
+     * frame around the whole screen for as long as the game is waiting on you.
+     */
+    private void drawTurnSignal(GuiGraphics g) {
+        GameView view = duel.getGameView();
+        PlayerView me = duel.me();
+        if (view == null || me == null || duel.isOver()) return;
+        long now = System.currentTimeMillis();
+        PlayerView turn = view.getPlayerTurn();
+        boolean myTurn = turn != null && turn.getId() == me.getId();
+        if (myTurn && splashTurn != view.getTurn()) {
+            splashTurn = view.getTurn();
+            splashAt = now;
+        }
+        boolean waiting = duel.currentRequest() != null || duel.okEnabled || duel.cancelEnabled;
+        if (waiting) {
+            int a = (int) (110 + 80 * Math.sin(now / 220.0));
+            int c = (a << 24) | (Theme.GOLD & 0xFFFFFF), t = 3;
+            g.fill(0, 0, width, t, c);
+            g.fill(0, height - t, width, height, c);
+            g.fill(0, t, t, height - t, c);
+            g.fill(width - t, t, width, height - t, c);
+        }
+        long age = now - splashAt;
+        if (myTurn && splashTurn == view.getTurn() && age < 1800) {
+            float fade = age < 1200 ? 1f : 1f - (age - 1200) / 600f;
+            int alpha = Math.max(4, (int) (255 * fade));
+            int cy = height / 2 - 14;
+            g.fill(0, cy - 8, width, cy + 30, ((int) (150 * fade) << 24));
+            g.pose().pushPose();
+            g.pose().translate(width / 2f, cy, 400);
+            g.pose().scale(3f, 3f, 1);
+            g.drawCenteredString(font, "YOUR TURN", 0, 0, (alpha << 24) | (Theme.GOLD & 0xFFFFFF));
+            g.pose().popPose();
+        }
+    }
+
+    private static int stopPhases() {
+        try {
+            return dev.mtgcraft.MtgClientConfig.STOP_PHASES.get();
+        } catch (IllegalStateException notLoaded) {
+            return 0;
+        }
+    }
+
+    private static boolean highlightPlayable() {
+        try {
+            return dev.mtgcraft.MtgClientConfig.HIGHLIGHT_PLAYABLE.get();
+        } catch (IllegalStateException notLoaded) {
+            return true;
         }
     }
 

@@ -37,10 +37,19 @@ public class PromptScreen extends Screen {
         return false;
     }
 
+    /** Button i: side by side for one or two, stacked for more (a list of choices). */
+    private int[] button(int i, int[] p) {
+        int px = p[0], py = p[1], pw = p[2], ph = p[3], n = prompt.buttons().size();
+        if (n > 2) return new int[]{px + 10, py + ph - 26 - (n - 1 - i) * 22, pw - 20};
+        int bw = (pw - 20 - (n - 1) * 6) / Math.max(1, n);
+        return new int[]{px + 10 + i * (bw + 6), py + ph - 26, bw};
+    }
+
     private int[] panel() {
         int pw = Math.min(width - 20, 260);
         int lines = font.split(Component.literal(prompt.body()), pw - 20).size();
-        int ph = 40 + lines * 10 + 30;
+        int n = prompt.buttons().size();
+        int ph = 40 + lines * 10 + 30 + (n > 2 ? (n - 1) * 22 : 0);
         return new int[]{(width - pw) / 2, height / 2 - ph / 2 - 20, pw, ph};
     }
 
@@ -63,9 +72,9 @@ public class PromptScreen extends Screen {
             g.fill(px + 10, py + ph - 34, px + 10 + barW, py + ph - 32, Theme.GOLD);
         }
         int n = prompt.buttons().size();
-        int bw = (pw - 20 - (n - 1) * 6) / Math.max(1, n);
         for (int i = 0; i < n; i++) {
-            Theme.button(g, font, prompt.buttons().get(i), px + 10 + i * (bw + 6), py + ph - 26, bw, 18, mx, my, true, i == 0);
+            int[] b = button(i, p);
+            Theme.button(g, font, prompt.buttons().get(i), b[0], b[1], b[2], 18, mx, my, true, i == 0);
         }
     }
 
@@ -74,9 +83,9 @@ public class PromptScreen extends Screen {
         int[] p = panel();
         int px = p[0], py = p[1], pw = p[2], ph = p[3];
         int n = prompt.buttons().size();
-        int bw = (pw - 20 - (n - 1) * 6) / Math.max(1, n);
         for (int i = 0; i < n; i++) {
-            int bx = px + 10 + i * (bw + 6), by = py + ph - 26;
+            int[] b = button(i, p);
+            int bx = b[0], by = b[1], bw = b[2];
             if (mx >= bx && mx < bx + bw && my >= by && my < by + 18) {
                 String cmd = prompt.commands().get(i);
                 if (cmd.startsWith("/")) cmd = cmd.substring(1);

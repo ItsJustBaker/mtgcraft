@@ -32,7 +32,11 @@ public final class Tribal {
             {"Wizards", "Wizard"}, {"Knights", "Knight"}, {"Dinosaurs", "Dinosaur"}, {"Cats", "Cat"},
             {"Spiders", "Spider"}, {"Beasts", "Beast"}, {"Elementals", "Elemental"}, {"Pirates", "Pirate"},
             {"Insects", "Insect"}, {"Demons", "Demon"}, {"Spirits", "Spirit"}, {"Faeries", "Faerie"},
-            {"Soldiers", "Soldier"}, {"Wolves", "Wolf"}, {"Birds", "Bird"}, {"Skeletons", "Skeleton"}};
+            {"Soldiers", "Soldier"}, {"Wolves", "Wolf"}, {"Birds", "Bird"}, {"Skeletons", "Skeleton"},
+            {"Humans", "Human"}, {"Warriors", "Warrior"}, {"Clerics", "Cleric"}, {"Rogues", "Rogue"},
+            {"Rats", "Rat"}, {"Snakes", "Snake"}, {"Slivers", "Sliver"}, {"Giants", "Giant"},
+            {"Dwarves", "Dwarf"}, {"Horrors", "Horror"}, {"Hydras", "Hydra"}, {"Werewolves", "Werewolf"},
+            {"Ninjas", "Ninja"}, {"Squirrels", "Squirrel"}, {"Treefolk", "Treefolk"}, {"Golems", "Golem"}};
 
     private static final Random RNG = new Random();
 

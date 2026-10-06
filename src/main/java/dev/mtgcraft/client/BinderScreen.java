@@ -30,6 +30,7 @@ public class BinderScreen extends Screen {
 
     private final InteractionHand hand;
     private EditBox search;
+    private final CardFilter filter = new CardFilter();
     private int spread;
     private float pageTurn; // animation: 0 at rest, +-1 just turned
     private Cell hovered;
@@ -60,7 +61,7 @@ public class BinderScreen extends Screen {
         List<Cell> out = new ArrayList<>();
         String q = search == null ? "" : search.getValue().trim().toLowerCase(Locale.ROOT);
         for (CardBag.Entry e : CardBag.entries(binder())) {
-            if (!q.isEmpty() && !Cards.name(e.key()).toLowerCase(Locale.ROOT).contains(q)) continue;
+            if (!filter.matches(e.key(), e.foil(), q)) continue;
             out.add(new Cell(e.key(), e.foil(), e.count()));
         }
         var order = CardArt.collectionOrder();
@@ -160,6 +161,7 @@ public class BinderScreen extends Screen {
 
         g.drawString(font, CardBag.total(binder()) + " cards", 6, 8, Theme.MUTED);
         super.render(g, mx, my, partialTick);
+        filter.render(g, font, width / 2 + 76, 6, mx, my);
         if (hovered != null) CardArt.preview(g, hovered.key(), hovered.foil(), mx, width, height);
     }
 
@@ -187,6 +189,7 @@ public class BinderScreen extends Screen {
 
     @Override
     public boolean mouseClicked(double mx, double my, int button) {
+        if (filter.click(mx, my, button, width / 2 + 76, 6, () -> spread = 0)) return true;
         if (super.mouseClicked(mx, my, button)) return true;
         List<Cell> cells = pages();
         int spreads = Math.max(1, (cells.size() + 17) / 18);

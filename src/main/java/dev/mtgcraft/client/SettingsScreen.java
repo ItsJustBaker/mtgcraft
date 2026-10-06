@@ -76,12 +76,12 @@ public class SettingsScreen extends Screen {
         int n = Math.max(1, server.size());
         int yy = rowY(n) + 6 + (state != null && !state.canEdit() ? 8 : 0);
         int c0 = yy + 14;
-        return new int[]{c0, c0 + step(), c0 + 2 * step()};
+        return new int[]{c0, c0 + step(), c0 + 2 * step(), c0 + 3 * step()};
     }
 
     /** Done: {x, y, w, h}. At the bottom when there's room under the rows, otherwise beside the title. */
     private int[] done() {
-        int c2 = clientRows()[2];
+        int c2 = clientRows()[3];
         int y = py + ph - 24;
         if (y < c2 + 18) return new int[]{px + pw - 52, py + 4, 48, 14};
         return new int[]{width / 2 - 40, y, 80, 18};
@@ -110,7 +110,7 @@ public class SettingsScreen extends Screen {
         }
         g.drawString(font, "Just you", labelX, yy + 2, Theme.MUTED);
         int[] rows = clientRows();
-        int c0 = rows[0], c1 = rows[1], c2 = rows[2];
+        int c0 = rows[0], c1 = rows[1], c2 = rows[2], c3 = rows[3];
         g.drawString(font, "Duel intro", labelX, c0 + 4, Theme.TEXT);
         Theme.button(g, font, MtgClientConfig.DUEL_INTRO.get() ? "On" : "Off", btnX, c0, btnW, bh(), mx, my, true, false);
         g.drawString(font, "Battlefield view", labelX, c1 + 4, Theme.TEXT);
@@ -118,6 +118,8 @@ public class SettingsScreen extends Screen {
         g.drawString(font, "Auto-pass", labelX, c2 + 4, Theme.TEXT);
         Theme.button(g, font, MtgClientConfig.AUTO_PASS.get() ? "On (skip when nothing to play)" : "Off (always stop)",
                 btnX, c2, btnW, bh(), mx, my, true, false);
+        g.drawString(font, "Playable cards", labelX, c3 + 4, Theme.TEXT);
+        Theme.button(g, font, MtgClientConfig.HIGHLIGHT_PLAYABLE.get() ? "Glow green" : "No glow", btnX, c3, btnW, bh(), mx, my, true, false);
         int[] d = done();
         Theme.button(g, font, "Done", d[0], d[1], d[2], d[3], mx, my, true, true);
     }
@@ -146,10 +148,15 @@ public class SettingsScreen extends Screen {
             }
         }
         int[] rows = clientRows();
-        int c0 = rows[0], c1 = rows[1], c2 = rows[2];
+        int c0 = rows[0], c1 = rows[1], c2 = rows[2], c3 = rows[3];
         if (in(mx, my, btnX, c2, btnW, bh())) {
             MtgClientConfig.AUTO_PASS.set(!MtgClientConfig.AUTO_PASS.get());
             ClientTables.sendAutoPass();
+            Theme.click();
+            return true;
+        }
+        if (in(mx, my, btnX, c3, btnW, bh())) {
+            MtgClientConfig.HIGHLIGHT_PLAYABLE.set(!MtgClientConfig.HIGHLIGHT_PLAYABLE.get());
             Theme.click();
             return true;
         }

@@ -209,3 +209,34 @@ challenges the player with a spider jockey and a zombie; the client screenshots 
 - Only friends still within 16 blocks of the challenger at the start get pulled onto the stage and locked in.
 - The gauntlet's group/1v1 toggle now only controls whether extra mobs join.
 - Command: `/mtgduel accept|decline|join <player>` (`GauntletDuels.commands`). Code: `GauntletDuels` Lobby, INVITES, startPvp.
+
+## Session 8 (2026-10-06, local on the friend's PC, Zazael1): 0.2.6 test + fixes
+Tester is the user's friend (Zazael1, Windows user `cruzd`, Pro plan: keep token use low, they cap a session at ~35%).
+**Nothing below has been checked in game yet**: ask them to try it in the `MTG` CurseForge instance (0.2.6 jar installed).
+
+**Building without Card-Forge** (this PC has no card-forge checkout): extract the engine from a released mod jar.
+From `mtgcraft-0.2.x.jar`, take `forge/**`, `dev/mtgcraft/shadow/**`, the loose root files and `META-INF` (minus
+`mods.toml`/`MANIFEST.MF`) into `mtgcraft-engine.jar`, and `mtgcraft_data/res.zip` into a res folder. Then locally
+(never commit): drop `include 'engine'` from settings.gradle, point `engineJar` at that file and the resources srcDir
+at the res folder. Needs JDK 17 (Temurin zip); the PC only has Java 8 and 25.
+
+Done this session:
+- 0.2.6 code reviewed (concede freeze, gauntlet-on-trader, mob deck size, boss scaling): looked right.
+- Glove worn on the hand: `client/GloveRenderer` (render layer + RenderHandEvent; held third-person model scaled to 0).
+  User said the first version sat "in/inside the hand"; resized to wrap the arm. **Still needs their confirmation.**
+- "Delayed death" meant the *player* dying after a lost duel: `p.kill()` fallback when armour soaks the hit.
+- Auto-pass stops: phase bar click cycles normal → always stop (green line) → always skip. Stops ride in bits 16+
+  of the existing AutoPassPref skips int (`STOP_PHASES` client config); `AutoPass.stopsHere`.
+- Playable glow: server sends `setWeaklySelectable` (playable cards) at each priority prompt; client glows green
+  (`HIGHLIGHT_PLAYABLE`, Settings toggle).
+- Turn signal: `DuelScreen.drawTurnSignal` (YOUR TURN splash + gold frame while waiting on you).
+- Shift on a two-sided card's zoom shows its back; the top stack card is drawn big mid-board (`drawStackLabel`).
+- Deck choice: user rejected shift-click; carrying 2+ decks pops a "Which deck?" Prompt (`/mtgduel deck <slot> <mob>`),
+  the pick is marked active (glint) and preferred by `DeckBoxItem.find`. PromptScreen stacks >2 buttons.
+- `client/CardFilter`: W U B R G C / type / foil filters + type-line search in the deck builder and binder.
+- Join error "Index 0 out of bounds" was NOT MTGCraft: client drops while decoding the recipe sync; Quark configs
+  differ between host and friend (Shiba data-ID mismatch). Fix = copy the host's `config` folder to the friend.
+- GameTests: added `gauntletOnVillager`, `mobDeckMatchesLibrary` (both pass; the suite still OOMs late, as before).
+
+Still to do from the 0.2.6 list: card frame item (6 per block), Binder hold position + 3D flip-through Binder,
+commander/first-card art on deck boxes. Multiplayer (concede together, join) still untested with two real players.

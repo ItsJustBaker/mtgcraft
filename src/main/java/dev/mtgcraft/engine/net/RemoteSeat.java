@@ -33,6 +33,8 @@ public final class RemoteSeat {
     public final RemoteClientGuiGame gui;
     /** The Minecraft player in this seat (for their auto-pass setting); set by whoever opens the seat. */
     public volatile java.util.UUID player;
+    /** Runs (on the network thread) when this player concedes from their duel screen; set by whoever opens the seat. */
+    public volatile Runnable onConcede;
 
     public RemoteSeat(String playerName, Wire wire) {
         tunnel = new Tunnel("seat", new Handler(), wire);
@@ -89,6 +91,12 @@ public final class RemoteSeat {
         protected void beforeCall(ChannelHandlerContext ctx, ProtocolMethod method, Object[] args) {
             if (method == ProtocolMethod.requestResync) {
                 gui.setResyncPending();
+            } else if (method == ProtocolMethod.concede) {
+                // Conceding mid-choice (or two players conceding at once) left the game waiting forever on an
+                // answer that would never come. Once the concession is in, release anything still pending.
+                dev.mtgcraft.engine.ForgeEngine.runOnUi(RemoteSeat.this::cancelPending);
+                Runnable hook = onConcede;
+                if (hook != null) hook.run();
             }
         }
     }
