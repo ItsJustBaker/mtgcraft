@@ -219,6 +219,52 @@ public final class GauntletDuels {
         }
     }
 
+    /** Players who just picked their deck from the menu: the next challenge goes ahead without asking again. */
+    private static final Set<UUID> DECK_PICKED = new HashSet<>();
+
+    /**
+     * Carrying two or more decks (and none in the off hand, which is always a deliberate pick): ask which one to
+     * fight with. The last one picked is listed first. Returns true when the menu was sent.
+     */
+    private static boolean askDeck(ServerPlayer p, Mob target) {
+        if (DeckBoxItem.usableBox(p.getOffhandItem())) return false;
+        List<Integer> slots = new ArrayList<>();
+        var items = p.getInventory().items;
+        for (int i = 0; i < items.size(); i++) if (DeckBoxItem.usableBox(items.get(i))) slots.add(i);
+        if (slots.size() < 2) return false;
+        slots.sort(java.util.Comparator.comparing(i -> !DeckBoxItem.isActive(items.get(i))));
+        List<String> labels = new ArrayList<>(), cmds = new ArrayList<>();
+        for (int slot : slots.subList(0, Math.min(6, slots.size()))) {
+            ItemStack box = items.get(slot);
+            String cmd = box.getItem() instanceof DeckBoxItem ? DeckBoxItem.commander(box) : null;
+            labels.add(box.getHoverName().getString() + (cmd != null ? " - " + dev.mtgcraft.engine.Cards.name(cmd) : ""));
+            cmds.add("/mtgduel deck " + slot + " " + target.getId());
+        }
+        labels.add("Cancel");
+        cmds.add("");
+        Net.toPlayer(p, new Packets.Prompt("Which deck?",
+                "Pick the deck to fight " + target.getDisplayName().getString() + " with.", labels, cmds, 30));
+        return true;
+    }
+
+    /** From the deck menu: use the deck in this inventory slot and challenge the mob. */
+    private static int pickDeck(ServerPlayer p, int slot, int mobId) {
+        var items = p.getInventory().items;
+        if (slot < 0 || slot >= items.size() || !DeckBoxItem.usableBox(items.get(slot))) {
+            tell(p, "That deck isn't in your inventory any more.");
+            return 0;
+        }
+        if (!(p.level().getEntity(mobId) instanceof Mob mob) || !mob.isAlive() || mob.distanceTo(p) > GauntletItem.RANGE + 8) {
+            tell(p, "That mob is gone.");
+            return 0;
+        }
+        DeckBoxItem.setActive(p, items.get(slot));
+        DECK_PICKED.add(p.getUUID());
+        challenge(p, mob);
+        DECK_PICKED.remove(p.getUUID());
+        return 1;
+    }
+
     private static boolean holdsGauntlet(ServerPlayer p) {
         for (ItemStack s : p.getInventory().items) if (s.getItem() instanceof GauntletItem) return true;
         return p.getOffhandItem().getItem() instanceof GauntletItem;
@@ -242,6 +288,7 @@ public final class GauntletDuels {
             return;
         }
         if (deckOf(player, false) == null) return;
+        if (!DECK_PICKED.remove(player.getUUID()) && askDeck(player, target)) return;
 
         // Friends close by with a gauntlet and a ready deck get a few seconds to click [Join].
         List<ServerPlayer> nearby = new ArrayList<>();
@@ -849,6 +896,12 @@ public final class GauntletDuels {
                 case DEATH -> {
                     tell(p, "You lost the duel...");
                     p.hurt(victor != null ? p.damageSources().mobAttack(victor) : p.damageSources().magic(), Float.MAX_VALUE);
+                    if (p.isAlive()) {
+                        // Modded armour and damage caps (ATM9) can soak or cap that hit, leaving the player to die
+                        // seconds later or not at all. Finish it with a kill that ignores armour and hit cooldowns.
+                        p.invulnerableTime = 0;
+                        p.kill();
+                    }
                 }
                 case DAMAGE -> {
                     tell(p, "You lost the duel and take a beating.");
@@ -993,6 +1046,11 @@ public final class GauntletDuels {
     @SubscribeEvent
     public static void commands(RegisterCommandsEvent event) {
         event.getDispatcher().register(Commands.literal("mtgduel")
+                .then(Commands.literal("deck").then(Commands.argument("slot", com.mojang.brigadier.arguments.IntegerArgumentType.integer(0))
+                        .then(Commands.argument("mob", com.mojang.brigadier.arguments.IntegerArgumentType.integer())
+                                .executes(c -> c.getSource().getPlayer() == null ? 0 : pickDeck(c.getSource().getPlayer(),
+                                        com.mojang.brigadier.arguments.IntegerArgumentType.getInteger(c, "slot"),
+                                        com.mojang.brigadier.arguments.IntegerArgumentType.getInteger(c, "mob"))))))
                 .then(Commands.literal("accept").then(Commands.argument("player", StringArgumentType.word())
                         .executes(c -> withPlayer(c.getSource(), StringArgumentType.getString(c, "player"), GauntletDuels::accept))))
                 .then(Commands.literal("decline").then(Commands.argument("player", StringArgumentType.word())

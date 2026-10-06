@@ -131,7 +131,7 @@ public final class ClientTables {
         int skips;
         try {
             on = dev.mtgcraft.MtgClientConfig.AUTO_PASS.get();
-            skips = dev.mtgcraft.MtgClientConfig.SKIP_PHASES.get();
+            skips = dev.mtgcraft.MtgClientConfig.SKIP_PHASES.get() | dev.mtgcraft.MtgClientConfig.STOP_PHASES.get() << 16;
         } catch (IllegalStateException notLoaded) {
             on = true;
             skips = 0;

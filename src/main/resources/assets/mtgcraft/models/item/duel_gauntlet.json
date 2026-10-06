@@ -520,9 +520,9 @@
     1
    ],
    "scale": [
-    0.6,
-    0.6,
-    0.6
+    0,
+    0,
+    0
    ]
   },
   "thirdperson_lefthand": {
@@ -537,9 +537,9 @@
     1
    ],
    "scale": [
-    0.6,
-    0.6,
-    0.6
+    0,
+    0,
+    0
    ]
   },
   "firstperson_righthand": {

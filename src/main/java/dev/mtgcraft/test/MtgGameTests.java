@@ -169,4 +169,41 @@ public class MtgGameTests {
         });
     }
 
+    /** Right-clicking a villager with the gauntlet starts a duel and never opens the trade menu. */
+    @GameTest(template = "arena", timeoutTicks = 400_000)
+    public static void gauntletOnVillager(GameTestHelper h) {
+        h.assertTrue(engineReady(), "card engine not ready");
+        ServerPlayer p = player(h);
+        Deck deck = Packs.themeDeck(Packs.Theme.VILLAGE, 6, "Test deck");
+        ItemStack box = new ItemStack(MtgCraft.DECK_BOX.get());
+        for (Map.Entry<PaperCard, Integer> e : deck.getMain()) CardBag.add(box, Cards.key(e.getKey()), false, e.getValue());
+        p.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(MtgCraft.DUEL_GAUNTLET.get()));
+        p.getInventory().add(box);
+        TableSessions.engineReady(p);
+        var villager = h.spawnWithNoFreeWill(EntityType.VILLAGER, new BlockPos(3, 1, 4));
+        villager.setVillagerData(villager.getVillagerData().setProfession(net.minecraft.world.entity.npc.VillagerProfession.LIBRARIAN).setLevel(2));
+        var event = new net.minecraftforge.event.entity.player.PlayerInteractEvent.EntityInteract(p, InteractionHand.MAIN_HAND, villager);
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(event);
+        h.assertTrue(event.isCanceled(), "gauntlet click on a villager should be intercepted");
+        h.assertTrue(villager.getTradingPlayer() == null, "villager opened its trade menu");
+        h.assertTrue(GauntletDuels.inDuel(p.getUUID()), "gauntlet click on a villager should start a duel");
+        p.setPos(p.getX() + 100, p.getY(), p.getZ());
+        h.succeedWhen(() -> h.assertTrue(!GauntletDuels.inDuel(p.getUUID()), "duel still running"));
+    }
+
+    /** Mob decks grow to the player's library size (60) with a sane land count, so they aren't tighter than ours. */
+    @GameTest(template = "arena", timeoutTicks = ENGINE_WAIT)
+    public static void mobDeckMatchesLibrary(GameTestHelper h) {
+        h.assertTrue(engineReady(), "card engine not ready");
+        h.succeedIf(() -> {
+            for (Packs.Theme t : new Packs.Theme[] {Packs.Theme.UNDEAD, Packs.Theme.OVERWORLD, Packs.Theme.VILLAGE}) {
+                Deck d = Packs.themeDeck(t, 6, "Mob deck", false, 60);
+                int total = d.getMain().countAll(), lands = 0;
+                for (Map.Entry<PaperCard, Integer> e : d.getMain()) if (e.getKey().getRules().getType().isLand()) lands += e.getValue();
+                h.assertTrue(total == 60, t + " mob deck has " + total + " cards, expected 60");
+                h.assertTrue(lands >= 20 && lands <= 30, t + " mob deck has " + lands + " lands of 60");
+            }
+        });
+    }
+
 }

@@ -95,36 +95,65 @@ public final class AutoPass {
                 // no game yet
             }
         }
-        if (!enabled(player)) return;
         Input input = controller.getInputQueue().getInput();
-        if (!(input instanceof InputPassPriority)) return;
-        boolean moves;
-        try {
-            moves = hasMoves(controller.getPlayer());
-        } catch (RuntimeException e) {
-            return; // when unsure, let the player decide
+        List<Card> playable = null;
+        if (input instanceof InputPassPriority) {
+            try {
+                playable = playable(controller.getPlayer());
+            } catch (RuntimeException e) {
+                // unsure: no highlight, and no auto-pass below
+            }
         }
-        if (moves) return;
+        // The cards this player can play right now glow on their screen (a highlight only, not a pick).
+        try {
+            var gui = controller.getGui();
+            gui.clearWeaklySelectable();
+            if (playable != null && !playable.isEmpty()) gui.setWeaklySelectable(playable.stream().map(Card::getView).toList());
+        } catch (RuntimeException ignored) {
+            // the game is shutting down
+        }
+        if (!enabled(player)) return;
+        if (!(input instanceof InputPassPriority) || playable == null) return;
+        if (stopsHere(controller, player)) return;
+        if (!playable.isEmpty()) return;
         TIMER.schedule(() -> {
             if (controller.getInputQueue().getInput() == input) controller.selectButtonOk();
         }, DELAY_MS, TimeUnit.MILLISECONDS);
     }
 
+    /** Whether the player marked the current phase as a stop (bits 16+ of their mask): auto-pass never passes there. */
+    private static boolean stopsHere(PlayerControllerHuman controller, java.util.UUID player) {
+        int stops = player == null ? 0 : SKIPS.getOrDefault(player, 0) >>> 16;
+        if (stops == 0) return false;
+        PhaseType now = controller.getGame().getPhaseHandler().getPhase();
+        for (int i = 0; i < SEGMENTS.length; i++) {
+            if ((stops & (1 << i)) == 0) continue;
+            for (PhaseType ph : SEGMENTS[i]) if (ph == now) return true;
+        }
+        return false;
+    }
+
     /** Whether the player could play a land or use any spell or ability right now (and pay for it). */
     public static boolean hasMoves(Player p) {
+        return !playable(p).isEmpty();
+    }
+
+    /** The cards with a land play, spell or ability the player could use right now (and pay for). */
+    public static List<Card> playable(Player p) {
+        List<Card> out = new java.util.ArrayList<>();
         for (ZoneType z : ZONES) {
             for (Card c : p.getCardsIn(z)) {
-                List<SpellAbility> abilities = c.getAllPossibleAbilities(p, true);
-                for (SpellAbility sa : abilities) {
+                for (SpellAbility sa : c.getAllPossibleAbilities(p, true)) {
                     if (sa.isManaAbility()) continue;
-                    if (sa.isLandAbility()) return true;
-                    sa.setActivatingPlayer(p);
-                    if (ComputerUtilMana.canPayManaCost(sa, p, 0, false) && ComputerUtilCost.canPayCost(sa, p, false)) {
-                        return true;
+                    if (!sa.isLandAbility()) {
+                        sa.setActivatingPlayer(p);
+                        if (!ComputerUtilMana.canPayManaCost(sa, p, 0, false) || !ComputerUtilCost.canPayCost(sa, p, false)) continue;
                     }
+                    out.add(c);
+                    break;
                 }
             }
         }
-        return false;
+        return out;
     }
 }

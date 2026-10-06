@@ -34,6 +34,7 @@ public class DeckBuilderScreen extends Screen {
     private static final int ROW = 11;
     private final InteractionHand hand;
     private EditBox search;
+    private final CardFilter filter = new CardFilter();
     private int page;
     private int deckScroll;
     private Cell hovered;
@@ -68,6 +69,8 @@ public class DeckBuilderScreen extends Screen {
 
     private int leftW() { return (int) (width * 0.6f); }
 
+    private int filterX() { return 8 + Math.min(160, leftW() - 16) + 6; }
+
     /** Every card you carry, loose or in binders, merged by printing. */
     private List<Cell> collection() {
         Map<String, Cell> agg = new LinkedHashMap<>();
@@ -83,7 +86,7 @@ public class DeckBuilderScreen extends Screen {
         String q = search == null ? "" : search.getValue().trim().toLowerCase(Locale.ROOT);
         List<Cell> out = new ArrayList<>();
         for (Cell c : agg.values()) {
-            if (q.isEmpty() || Cards.name(c.key()).toLowerCase(Locale.ROOT).contains(q)) out.add(c);
+            if (filter.matches(c.key(), c.foil(), q)) out.add(c);
         }
         var order = CardArt.collectionOrder();
         out.sort((a, b) -> order.compare(a.key(), b.key()));
@@ -110,6 +113,7 @@ public class DeckBuilderScreen extends Screen {
         drawCollection(g, mx, my);
         drawDeck(g, mx, my);
         super.render(g, mx, my, partialTick);
+        filter.render(g, font, filterX(), 6, mx, my);
         if (hovered != null) CardArt.preview(g, hovered.key(), hovered.foil(), mx, width, height);
     }
 
@@ -293,6 +297,7 @@ public class DeckBuilderScreen extends Screen {
 
     @Override
     public boolean mouseClicked(double mx, double my, int button) {
+        if (filter.click(mx, my, button, filterX(), 6, () -> page = 0)) return true;
         if (super.mouseClicked(mx, my, button)) return true;
         int x = leftW() + 4, w = width - x - 6, by = 21 + SLOT_H + 6;
         if (crownHover != null) {

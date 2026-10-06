@@ -57,6 +57,11 @@ public class DeckBoxItem extends Item {
     }
 
     @Override
+    public boolean isFoil(ItemStack stack) {
+        return isActive(stack) || super.isFoil(stack);
+    }
+
+    @Override
     public Component getName(ItemStack stack) {
         int n = CardBag.total(stack);
         return n == 0 ? super.getName(stack) : Component.literal("Deck Box (" + n + " cards)");
@@ -69,6 +74,7 @@ public class DeckBoxItem extends Item {
                 .withStyle(n >= MIN_CARDS ? ChatFormatting.GREEN : ChatFormatting.YELLOW));
         String cmd = commander(stack);
         if (cmd != null) lines.add(Component.literal("Commander: " + Cards.name(cmd)).withStyle(ChatFormatting.GOLD));
+        if (isActive(stack)) lines.add(Component.literal("Active deck: duels use this one").withStyle(ChatFormatting.AQUA));
         lines.add(Component.literal("Right-click to build").withStyle(ChatFormatting.DARK_GRAY));
     }
 
@@ -104,8 +110,28 @@ public class DeckBoxItem extends Item {
     public static ItemStack find(Player player) {
         ItemStack off = player.getOffhandItem();
         if (usable(off)) return off;
+        for (ItemStack s : player.getInventory().items) if (usable(s) && isActive(s)) return s;
         for (ItemStack s : player.getInventory().items) if (usable(s)) return s;
         return ItemStack.EMPTY;
+    }
+
+    private static final String TAG_ACTIVE = "ActiveDeck";
+
+    /** Whether this deck box is the one marked for duels (Shift + right-click). */
+    public static boolean isActive(ItemStack s) {
+        return s.getTag() != null && s.getTag().getBoolean(TAG_ACTIVE);
+    }
+
+    /** Duels use this deck box from now on (every other deck box the player carries is unmarked). */
+    public static void setActive(Player player, ItemStack stack) {
+        for (ItemStack s : player.getInventory().items) if (s != stack && s.getTag() != null) s.getTag().remove(TAG_ACTIVE);
+        if (player.getOffhandItem() != stack && player.getOffhandItem().getTag() != null) player.getOffhandItem().getTag().remove(TAG_ACTIVE);
+        stack.getOrCreateTag().putBoolean(TAG_ACTIVE, true);
+    }
+
+    /** Whether this stack is a deck box that can be dueled with. */
+    public static boolean usableBox(ItemStack s) {
+        return usable(s);
     }
 
     private static boolean usable(ItemStack s) {
