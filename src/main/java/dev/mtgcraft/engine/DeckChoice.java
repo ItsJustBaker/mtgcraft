@@ -25,7 +25,15 @@ public record DeckChoice(Kind kind, List<String> colors, String name) {
     public static DeckChoice theme(Packs.Theme theme, int packs) { return theme(theme, packs, false); }
     /** With {@code commander}, the themed deck gets a legendary commander from its theme. */
     public static DeckChoice theme(Packs.Theme theme, int packs, boolean commander) {
-        return new DeckChoice(Kind.THEME, commander ? List.of(String.valueOf(packs), "C") : List.of(String.valueOf(packs)), theme.name());
+        return theme(theme, packs, commander, 0);
+    }
+    /** With {@code library} over 40, a classic themed deck is grown to that many cards (see Packs.themeDeck). */
+    public static DeckChoice theme(Packs.Theme theme, int packs, boolean commander, int library) {
+        List<String> opts = new ArrayList<>();
+        opts.add(String.valueOf(packs));
+        if (commander) opts.add("C");
+        if (library > 0) opts.add("L" + library);
+        return new DeckChoice(Kind.THEME, List.copyOf(opts), theme.name());
     }
 
     /** A deck around a creature type (see {@link Tribal#TRIBES}); a Commander deck in Commander games. */
@@ -59,7 +67,9 @@ public record DeckChoice(Kind kind, List<String> colors, String name) {
                 Packs.Theme t = Packs.Theme.valueOf(name);
                 int packs = colors.isEmpty() ? 6 : Integer.parseInt(colors.get(0));
                 boolean commander = colors.contains("C");
-                return Packs.themeDeck(t, packs, t.label.replace(" Pack", "").replace(" Box", "") + " deck", commander);
+                int library = 0;
+                for (String o : colors) if (o.startsWith("L")) library = Integer.parseInt(o.substring(1));
+                return Packs.themeDeck(t, packs, t.label.replace(" Pack", "").replace(" Box", "") + " deck", commander, library);
             }
             default -> {
                 // Generated from Modern-legal printings, so no joke or digital-only cards.

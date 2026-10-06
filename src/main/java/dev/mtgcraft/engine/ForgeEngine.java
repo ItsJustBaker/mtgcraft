@@ -105,6 +105,8 @@ public final class ForgeEngine {
             }
         }, "MTGCraft loader");
         t.setDaemon(true);
+        // Background work: never let it crowd out the game's own threads (render, network, server tick).
+        t.setPriority(Thread.MIN_PRIORITY);
         t.start();
     }
 

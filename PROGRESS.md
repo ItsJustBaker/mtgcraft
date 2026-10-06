@@ -159,6 +159,22 @@ Done this session:
   - Concede during setup hung the game.
   - Pending replies are now released on concede.
 
+## 0.2.6 (bugs and balance from the user's 0.2.6 list; written without the engine jars, so not compiled here)
+- Concede freeze: an in-screen concede now releases the game's pending question (`RemoteSeat`), the duel screen drops
+  questions left open after game over (`DuelGui.currentRequest`), and the server counts in-screen concessions so its
+  watchdog frees everyone 15 s after all players conceded (`GauntletDuels.Duel.conceded`).
+- Gauntlet on villagers/traders: an `EntityInteract` handler (`ServerEvents`) starts the duel before the mob's own
+  right-click runs.
+- Late mob deaths (ATM9 damage caps): the win clears hit cooldown, kills again, and falls back to `die()`.
+- Joining a friend: the client loads cards 20 s after it's in the world (not at login), on a low-priority thread.
+  The logs showed a clean "Disconnected" twice, no crash; ask the friend what they saw if it still happens.
+- Creature types: 40 instead of 24, in a 5-column grid.
+- Balance: in classic duels mob decks grow to the player's library size (`Packs.growDeck`); bosses get
+  `bossLife` (30) + `bossLifePerExtraPlayer` (15) per extra player, and solo bosses build from `bossSoloPacks` (8).
+- Left for later from the 0.2.6 list: filters, foils, deck picker, varied starters, auto-pass stops, playable
+  highlights, turn banner, card backs, card frame, glove/binder visuals, 3D binder, deck pictures, played card in the
+  middle.
+
 ## Known issues
 - `gradlew runGameTestServer` still runs out of memory. Some test (probably `starterKit` or `openThemedPack`) loops
   creating FakePlayers: `FakePlayerFactory.get` with a new profile every call leaks. Fix: make one shared test

@@ -308,6 +308,16 @@ public final class Packs {
 
     /** As above; with {@code commander}, a legendary creature from the theme leads the deck. */
     public static Deck themeDeck(Theme theme, int packs, String name, boolean commander) {
+        return themeDeck(theme, packs, name, commander, 0);
+    }
+
+    /**
+     * As above; a non-Commander deck is grown to {@code library} cards when that's more than 40, so a mob draws
+     * from a library as big as its opponent's. A tight 40-card sealed deck finds its best cards far more often than
+     * a 100-card one, which made mobs much faster than the players they fought. The extra cards are the rest of
+     * the opened pool (and more packs if needed) in the deck's colours, with lands kept at the same ratio.
+     */
+    public static Deck themeDeck(Theme theme, int packs, String name, boolean commander, int library) {
         if (commander) {
             // A full 100-card Commander deck, built by Card-Forge around a legendary creature of the theme.
             Deck sample = themeDeck(theme, packs, name, false);
@@ -331,7 +341,54 @@ public final class Packs {
         }
         Deck deck = new SealedDeckBuilder(pool).buildDeck();
         deck.setName(name);
+        if (library > deck.getMain().countAll()) growDeck(deck, theme, pool, library);
         return deck;
+    }
+
+    /** Grows a sealed deck to {@code library} cards: same land ratio, the rest from on-colour pool cards. */
+    private static void growDeck(Deck deck, Theme theme, List<PaperCard> pool, int library) {
+        var main = deck.getMain();
+        int total = main.countAll(), lands = 0;
+        byte colors = 0;
+        List<PaperCard> basics = new ArrayList<>();
+        for (PaperCard pc : main.toFlatList()) {
+            CardRules r = pc.getRules();
+            if (r.getType().isLand()) {
+                lands++;
+                if (r.getType().isBasicLand()) basics.add(pc);
+            } else if (r.getColor() != null) {
+                colors |= r.getColor().getColor();
+            }
+        }
+        if (total == 0) return;
+        int addLands = Math.max(0, Math.round((float) library * lands / total) - lands);
+        int addSpells = library - total - addLands;
+
+        // Spare cards: what the deck builder left out of the pool, then more packs, in the deck's colours.
+        List<PaperCard> spare = new ArrayList<>();
+        java.util.Map<String, Integer> used = new java.util.HashMap<>();
+        for (PaperCard pc : main.toFlatList()) used.merge(pc.getName(), 1, Integer::sum);
+        for (PaperCard pc : pool) {
+            if (used.merge(pc.getName(), -1, Integer::sum) >= 0) continue;
+            if (fitsColors(pc, colors)) spare.add(pc);
+        }
+        for (int tries = 0; spare.size() < addSpells && tries < 12; tries++) {
+            for (Pull p : openTheme(theme)) {
+                if (!p.card().getRules().getType().isLand() && fitsColors(p.card(), colors)) spare.add(p.card());
+            }
+        }
+        java.util.Collections.shuffle(spare, RNG);
+        for (int i = 0; i < addSpells && i < spare.size(); i++) main.add(spare.get(i), 1);
+        // Anything still missing (a tiny pool) is made up with basic lands.
+        int missing = library - main.countAll();
+        for (int i = 0; i < missing && !basics.isEmpty(); i++) main.add(basics.get(i % basics.size()), 1);
+    }
+
+    private static boolean fitsColors(PaperCard pc, byte colors) {
+        CardRules r = pc.getRules();
+        if (r.getType().isLand()) return false;
+        ColorSet cs = r.getColor();
+        return cs == null || (cs.getColor() & ~colors) == 0;
     }
 
     /** A legendary creature of the theme in the deck's colours (any colour if none fits), rarest first. */

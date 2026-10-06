@@ -63,6 +63,13 @@ public final class DuelGui extends NetworkGuiGame {
     /** The question the screen should show now, or null. */
     public ChoiceRequest currentRequest() {
         ChoiceRequest r;
+        if (isOver()) {
+            // A question still open when the game ended (both players conceding at once) is moot, and would
+            // otherwise sit over the board and hide the game-over panel for good.
+            requests.forEach(q -> q.answer.cancel(false));
+            requests.clear();
+            return null;
+        }
         while ((r = requests.peekFirst()) != null && r.answer.isDone()) {
             requests.remove(r);
         }

@@ -38,6 +38,19 @@ public class GauntletItem extends Item {
         }
     }
 
+    /**
+     * Mobs with their own right-click (villagers, traders, tameables, rideables) handle the click before the held
+     * item is asked, so a gauntlet would open the trade menu instead of starting a duel. This runs first instead
+     * (from an EntityInteract event) and keeps the mob's own interaction from going off at all.
+     */
+    public static boolean interceptEntityClick(Player player, net.minecraft.world.entity.Entity target, InteractionHand hand) {
+        ItemStack stack = player.getItemInHand(hand);
+        if (!(stack.getItem() instanceof GauntletItem g) || !(target instanceof LivingEntity living)) return false;
+        if (!(target instanceof Mob) && !(target instanceof Player)) return false;
+        g.interactLivingEntity(stack, player, living, hand);
+        return true;
+    }
+
     @Override
     public InteractionResult interactLivingEntity(ItemStack stack, Player player, LivingEntity target, InteractionHand hand) {
         if (player.level().isClientSide) return InteractionResult.SUCCESS;

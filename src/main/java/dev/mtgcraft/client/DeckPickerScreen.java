@@ -146,12 +146,12 @@ public class DeckPickerScreen extends Screen {
             case 4 -> {
                 g.drawString(font, "What do you want to play?", x, py + 46, Theme.MUTED, false);
                 String[][] tribes = dev.mtgcraft.engine.Tribal.TRIBES;
-                int cols = 4, cw = (w - (cols - 1) * 3) / cols;
+                int cols = 5, cw = (w - (cols - 1) * 3) / cols;
                 for (int i = 0; i < tribes.length; i++) {
-                    int bx = x + (i % cols) * (cw + 3), by = py + 58 + (i / cols) * 17;
-                    Theme.button(g, font, tribes[i][0], bx, by, cw, 14, mx, my, true, tribes[i][1].equals(tribe));
+                    int bx = x + (i % cols) * (cw + 3), by = py + 58 + (i / cols) * 15;
+                    Theme.button(g, font, tribes[i][0], bx, by, cw, 13, mx, my, true, tribes[i][1].equals(tribe));
                 }
-                int ty = py + 58 + ((tribes.length + cols - 1) / cols) * 17 + 2;
+                int ty = py + 58 + ((tribes.length + cols - 1) / cols) * 15 + 2;
                 List<FormattedCharSequence> lines = font.split(Component.literal(
                         "A deck full of " + dev.mtgcraft.engine.Tribal.label(tribe).toLowerCase(Locale.ROOT)
                                 + ". In Commander games, one of them leads it."), w);
@@ -240,9 +240,9 @@ public class DeckPickerScreen extends Screen {
         }
         if (tab == 4) {
             String[][] tribes = dev.mtgcraft.engine.Tribal.TRIBES;
-            int cols = 4, cw = (w - (cols - 1) * 3) / cols;
+            int cols = 5, cw = (w - (cols - 1) * 3) / cols;
             for (int i = 0; i < tribes.length; i++) {
-                if (in(mx, my, x + (i % cols) * (cw + 3), py + 58 + (i / cols) * 17, cw, 14)) {
+                if (in(mx, my, x + (i % cols) * (cw + 3), py + 58 + (i / cols) * 15, cw, 13)) {
                     tribe = tribes[i][1];
                     Theme.click();
                     return true;

@@ -26,6 +26,15 @@ public final class ServerEvents {
         TableSessions.serverStopping();
     }
 
+    /** A gauntlet click on a mob always means a duel, never the mob's own menu (trading, taming...). */
+    @SubscribeEvent
+    public static void entityClick(net.minecraftforge.event.entity.player.PlayerInteractEvent.EntityInteract event) {
+        if (dev.mtgcraft.item.GauntletItem.interceptEntityClick(event.getEntity(), event.getTarget(), event.getHand())) {
+            event.setCanceled(true);
+            event.setCancellationResult(net.minecraft.world.InteractionResult.SUCCESS);
+        }
+    }
+
     @SubscribeEvent
     public static void loggedOut(PlayerEvent.PlayerLoggedOutEvent event) {
         if (event.getEntity() instanceof ServerPlayer p) TableSessions.playerLeft(p);

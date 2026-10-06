@@ -103,6 +103,22 @@ public final class GauntletDuels {
             if (forfeited.size() == players.size()) allForfeitedAt = System.currentTimeMillis();
         }
 
+        /** A player conceded from their duel screen: the game already has it, just keep count for the watchdog. */
+        void conceded(UUID player) {
+            if (!players.containsKey(player) || !forfeited.add(player)) return;
+            if (forfeited.size() == players.size()) allForfeitedAt = System.currentTimeMillis();
+        }
+
+        /** Hears in-screen concessions from each player's seat. */
+        void watchConcessions(MinecraftServer server) {
+            if (live == null) return;
+            for (Map.Entry<UUID, Integer> e : players.entrySet()) {
+                dev.mtgcraft.engine.net.RemoteSeat seat = live.seat(e.getValue());
+                UUID id = e.getKey();
+                if (seat != null) seat.onConcede = () -> server.execute(() -> conceded(id));
+            }
+        }
+
         int playerTeam() {
             return setup.effectiveTeam(players.values().iterator().next());
         }
@@ -408,14 +424,23 @@ public final class GauntletDuels {
                 : commander ? MatchSetup.Mode.COMMANDER : MatchSetup.Mode.TEAMS;
         List<Entity> seatEntities = new ArrayList<>();
         // The Archenemy sits in seat 1 (index 0); otherwise the players come first.
-        if (d.boss) addMobSeats(d, setup, seatEntities, commander);
+        // Mobs draw from a library as big as the biggest one a player brings (classic rules; Commander is 100 each).
+        int library = 0;
+        if (!commander) for (DeckChoice c : humans.values()) library = Math.max(library, librarySize(c));
+        // Bosses scale with how many players take them on, so one player can win alone.
+        int bossPacks = humans.size() > 1 ? 0 : MtgConfig.BOSS_SOLO_PACKS.get();
+        if (d.boss) addMobSeats(d, setup, seatEntities, commander, library, bossPacks);
         for (Map.Entry<ServerPlayer, DeckChoice> h : humans.entrySet()) {
             ServerPlayer p = h.getKey();
             d.players.put(p.getUUID(), setup.seats.size());
             setup.seats.add(new MatchSetup.Seat(false, p.getGameProfile().getName(), p.getUUID(), h.getValue(), 1));
             seatEntities.add(p);
         }
-        if (!d.boss) addMobSeats(d, setup, seatEntities, commander);
+        if (!d.boss) addMobSeats(d, setup, seatEntities, commander, library, 0);
+        if (d.boss) {
+            int life = MtgConfig.BOSS_LIFE.get() + MtgConfig.BOSS_LIFE_PER_EXTRA_PLAYER.get() * (humans.size() - 1);
+            for (MatchSetup.Seat st : setup.seats) if (st.ai) st.startingLife = life;
+        }
         if (quick) {
             int life = MobThemes.quickLife(tier);
             for (MatchSetup.Seat st : setup.seats) if (st.ai) st.startingLife = life;
@@ -453,6 +478,7 @@ public final class GauntletDuels {
                 },
                 result -> end(d, result));
         if (d.live == null) return;
+        d.watchConcessions(server);
 
         // Tell each player's client where the arena is and who sits where, for the 3D battlefield.
         List<Packets.ArenaSeat> seats = new ArrayList<>();
@@ -626,8 +652,27 @@ public final class GauntletDuels {
         return Math.max(mid.y, top + 1.2);
     }
 
-    /** Seats for the mobs: same kind = same team; themed decks (with a commander in Commander duels). */
-    private static void addMobSeats(Duel d, MatchSetup setup, List<Entity> seatEntities, boolean commander) {
+    /** How many cards a player's deck holds in a classic game (the size mobs match). */
+    private static int librarySize(DeckChoice c) {
+        if (c == null) return 60;
+        return switch (c.kind()) {
+            case CMD_PRECON -> 100;
+            case INLINE -> {
+                try {
+                    yield dev.mtgcraft.engine.Decks.fromText(c.name()).getMain().countAll();
+                } catch (RuntimeException e) {
+                    yield 60;
+                }
+            }
+            default -> 60;
+        };
+    }
+
+    /**
+     * Seats for the mobs: same kind = same team; themed decks (with a commander in Commander duels).
+     * {@code library}: classic decks grow to this many cards (0 = the usual 40). {@code packs}: pool size override (0 = by tier).
+     */
+    private static void addMobSeats(Duel d, MatchSetup setup, List<Entity> seatEntities, boolean commander, int library, int packs) {
         Map<String, Integer> teams = new LinkedHashMap<>();
         Map<String, Integer> names = new HashMap<>();
         for (Mob m : d.mobs) {
@@ -637,7 +682,7 @@ public final class GauntletDuels {
             int dup = names.merge(name, 1, Integer::sum);
             if (dup > 1) name += " " + dup;
             setup.seats.add(new MatchSetup.Seat(true, name, null,
-                    DeckChoice.theme(MobThemes.theme(face), MobThemes.packs(face), commander), team));
+                    DeckChoice.theme(MobThemes.theme(face), packs > 0 ? packs : MobThemes.packs(face), commander, library), team));
             seatEntities.add(m);
         }
     }
@@ -756,8 +801,19 @@ public final class GauntletDuels {
                     m.skipDropExperience();
                 }
                 CATCH.put(m.getUUID(), drops);
-                m.hurt(credit != null ? credit.damageSources().playerAttack(credit) : m.damageSources().magic(), Float.MAX_VALUE);
-                if (m.isAlive()) m.kill();
+                net.minecraft.world.damagesource.DamageSource src = credit != null ? credit.damageSources().playerAttack(credit) : m.damageSources().magic();
+                m.hurt(src, Float.MAX_VALUE);
+                if (m.isAlive()) {
+                    // Modded mobs (ATM9) often cap damage per hit, and the first hit's cooldown then blocks a second
+                    // one, so they'd die seconds later or not at all. Clear the cooldown and finish them for sure.
+                    m.invulnerableTime = 0;
+                    m.hurtTime = 0;
+                    m.kill();
+                }
+                if (m.isAlive() && !m.isDeadOrDying()) {
+                    m.setHealth(0);
+                    m.die(src);
+                }
                 CATCH.remove(m.getUUID());
                 NO_XP.remove(m.getUUID());
             }
@@ -921,6 +977,7 @@ public final class GauntletDuels {
                 },
                 result -> end(d, result));
         if (d.live == null) return;
+        d.watchConcessions(a.getServer());
         List<Packets.ArenaSeat> seats = new ArrayList<>();
         for (int i = 0; i < setup.seats.size(); i++) {
             seats.add(new Packets.ArenaSeat(setup.seats.get(i).name, seatEntities.get(i).getId()));
@@ -1004,7 +1061,7 @@ public final class GauntletDuels {
         if (tick % 2 != 0) return;
         Set<Duel> duels = new HashSet<>(BY_PLAYER.values());
         for (Duel d : duels) {
-            if (d.allForfeitedAt > 0 && System.currentTimeMillis() - d.allForfeitedAt > 60_000) {
+            if (d.allForfeitedAt > 0 && System.currentTimeMillis() - d.allForfeitedAt > 15_000) {
                 // Watchdog: the game never reported its end (it crashed or hung). Call it a draw (no penalty)
                 // and let everyone go, so mobs can't stay frozen.
                 end(d, new Matches.Result(true, -1, ""));
