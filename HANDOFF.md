@@ -317,3 +317,7 @@ for the new themes, teleport-mid-duel bug, bugs 46/48 (card names).
   (`MobThemes.creatureType`: alias table, then words of the entity id from the last; `Packs.openMob`: each slot 70%
   that type, the rest from the mob's theme). Stored as tags MobType/MobName on top of Theme (art still by theme).
   Used for duel rewards and kill drops (`PackItem.forMob`).
+- Playtest: the translucent emissive dome was invisible under Complementary (stars showed) and clouds drew over it
+  without shaders. Now `ArenaRenderer.stars` draws the dome with `RenderType.entitySolid` (full-bright, inward
+  normals), tiles flipping in from the floor up over 1.6 s with a violet edge, stars after 60%. Duel Disk blade
+  shortened to 11px / 3 zones ("too long"); glove overlay now covers only the hand (last 4px).

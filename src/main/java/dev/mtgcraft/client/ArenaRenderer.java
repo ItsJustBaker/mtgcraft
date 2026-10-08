@@ -131,11 +131,19 @@ public final class ArenaRenderer {
     private static final int STARS = 320;
     private static final net.minecraft.resources.ResourceLocation WHITE =
             new net.minecraft.resources.ResourceLocation(MtgCraft.MODID, "textures/misc/white.png");
+    /** How long the dome takes to close around the arena. */
+    private static final float SHIFT_MS = 1600f;
+
+    /** 0 to 1: how far the dome has closed (linear; the tiles ease themselves). */
+    private static float shift(Packets.Arena a) {
+        Long t = OPENED.get(a.key());
+        return t == null ? 1f : Math.min(1f, (System.currentTimeMillis() - t) / SHIFT_MS);
+    }
 
     /**
-     * A dome of deep space just outside the stage, drawn like the stage itself (an emissive entity layer), so it shows
-     * with shader packs too, which ignore the fog. It fades in as the duel starts, hiding sky, hills and cave walls,
-     * with twinkling stars on its inside.
+     * The world is pulled away: a dome of deep space closes around the stage, its tiles flipping in from the floor
+     * upward in a sweeping wave with a bright violet edge, then twinkling stars. It is drawn as solid entity geometry
+     * (full-bright), which shader packs render like any mob, and which hides clouds and terrain behind it.
      */
     @SubscribeEvent
     public static void stars(RenderLevelStageEvent event) {
@@ -143,44 +151,54 @@ public final class ArenaRenderer {
         Camera cam = event.getCamera();
         Packets.Arena a = around(cam.getPosition());
         if (a == null || !voidArena(a)) return;
-        float p = pull(a);
-        if (p <= 0.01f) return;
+        float p = shift(a);
         long now = System.currentTimeMillis();
         Vec3 c = new Vec3(a.x(), a.y(), a.z()).subtract(cam.getPosition());
         Matrix4f m = event.getPoseStack().last().pose();
         MultiBufferSource.BufferSource buffers = Minecraft.getInstance().renderBuffers().bufferSource();
-        RenderType type = RenderType.entityTranslucentEmissive(WHITE);
+        RenderType type = RenderType.entitySolid(WHITE);
         VertexConsumer vc = buffers.getBuffer(type);
         double r = a.radius() * 1.45 + 2;
 
-        // The dome: a full sphere, deep navy overhead and violet at the horizon (a boss arena burns a little red).
-        int lat = 14, lon = 36;
+        int lat = 16, lon = 40;
+        java.util.Random tiles = new java.util.Random(a.key().asLong() * 31);
         for (int i = 0; i < lat; i++) {
             double t0 = Math.PI * i / lat - Math.PI / 2, t1 = Math.PI * (i + 1) / lat - Math.PI / 2;
             for (int j = 0; j < lon; j++) {
+                // Each tile has its moment: lower rows first (a wave rising from the floor), a little jitter.
+                float when = 0.75f * (i / (float) lat) + 0.2f * tiles.nextFloat();
+                float k = Math.min(1, Math.max(0, (p - when) / 0.12f));
+                if (k <= 0) continue;
                 double f0 = 2 * Math.PI * j / lon, f1 = 2 * Math.PI * (j + 1) / lon;
-                Vec3 v00 = sph(c, r, t0, f0), v01 = sph(c, r, t0, f1), v11 = sph(c, r, t1, f1), v10 = sph(c, r, t1, f0);
-                int col = sky((t0 + t1) / 2, a.boss(), (int) (250 * p));
-                quad(vc, m, v00, v01, v11, v10, col);
-                quad(vc, m, v10, v11, v01, v00, col);
+                // A tile grows from its centre as it flips in.
+                double tm = (t0 + t1) / 2, fm = (f0 + f1) / 2, ease = k * k * (3 - 2 * k);
+                double a0 = tm + (t0 - tm) * ease, a1 = tm + (t1 - tm) * ease, b0 = fm + (f0 - fm) * ease, b1 = fm + (f1 - fm) * ease;
+                Vec3 v00 = sph(c, r, a0, b0), v01 = sph(c, r, a0, b1), v11 = sph(c, r, a1, b1), v10 = sph(c, r, a1, b0);
+                int col = k < 1 ? mix(0xB070FF, sky(tm, a.boss()), ease) : sky(tm, a.boss());
+                Vec3 n = c.subtract(sph(c, r, tm, fm)).normalize();
+                quad(vc, m, v00, v01, v11, v10, col, n);
+                quad(vc, m, v10, v11, v01, v00, col, n);
             }
         }
-        // Stars on the inside of the dome.
-        org.joml.Vector3f left = cam.getLeftVector(), up = cam.getUpVector();
-        java.util.Random rng = new java.util.Random(a.key().asLong());
-        double sr = r * 0.97;
-        for (int i = 0; i < STARS; i++) {
-            double yy = rng.nextDouble() * 1.2 - 0.2, ang = rng.nextDouble() * Math.PI * 2 + now / 120000.0;
-            double rr = Math.sqrt(Math.max(0, 1 - yy * yy));
-            Vec3 s = c.add(Math.cos(ang) * rr * sr, yy * sr, Math.sin(ang) * rr * sr);
-            float size = (float) (0.05 + rng.nextDouble() * rng.nextDouble() * 0.16) * (float) (r / 8);
-            float tw = 0.6f + 0.4f * (float) Math.sin(now / (250.0 + rng.nextInt(900)) + i);
-            int tint = rng.nextInt(6);
-            int rgb = tint == 0 ? 0xA8C4FF : tint == 1 ? 0xFFE2A8 : tint == 2 ? 0xE0B8FF : 0xFFFFFF;
-            int col = ((int) (255 * p * tw) << 24) | rgb;
-            Vec3 l = new Vec3(left.x() * size, left.y() * size, left.z() * size), u = new Vec3(up.x() * size, up.y() * size, up.z() * size);
-            quad(vc, m, s.subtract(l).subtract(u), s.add(l).subtract(u), s.add(l).add(u), s.subtract(l).add(u), col);
-            quad(vc, m, s.subtract(l).add(u), s.add(l).add(u), s.add(l).subtract(u), s.subtract(l).subtract(u), col);
+        // Stars, once the dome is mostly closed: small bright tiles just inside it, twinkling by size.
+        if (p > 0.6f) {
+            float sp = Math.min(1, (p - 0.6f) / 0.4f);
+            org.joml.Vector3f left = cam.getLeftVector(), up = cam.getUpVector();
+            java.util.Random rng = new java.util.Random(a.key().asLong());
+            double sr = r * 0.97;
+            for (int i = 0; i < STARS; i++) {
+                double yy = rng.nextDouble() * 1.2 - 0.2, ang = rng.nextDouble() * Math.PI * 2 + now / 120000.0;
+                double rr = Math.sqrt(Math.max(0, 1 - yy * yy));
+                Vec3 s = c.add(Math.cos(ang) * rr * sr, yy * sr, Math.sin(ang) * rr * sr);
+                float tw = 0.55f + 0.45f * (float) Math.sin(now / (250.0 + rng.nextInt(900)) + i);
+                float size = sp * tw * (float) (0.05 + rng.nextDouble() * rng.nextDouble() * 0.14) * (float) (r / 8);
+                int tint = rng.nextInt(6);
+                int col = tint == 0 ? 0xA8C4FF : tint == 1 ? 0xFFE2A8 : tint == 2 ? 0xE0B8FF : 0xFFFFFF;
+                Vec3 l = new Vec3(left.x() * size, left.y() * size, left.z() * size), u = new Vec3(up.x() * size, up.y() * size, up.z() * size);
+                Vec3 n = c.subtract(s).normalize();
+                quad(vc, m, s.subtract(l).subtract(u), s.add(l).subtract(u), s.add(l).add(u), s.subtract(l).add(u), col, n);
+                quad(vc, m, s.subtract(l).add(u), s.add(l).add(u), s.add(l).subtract(u), s.subtract(l).subtract(u), col, n);
+            }
         }
         buffers.endBatch(type);
     }
@@ -190,17 +208,24 @@ public final class ArenaRenderer {
     }
 
     /** Space colour by height on the dome (theta -pi/2 at the bottom to pi/2 overhead). */
-    private static int sky(double theta, boolean boss, int alpha) {
+    private static int sky(double theta, boolean boss) {
         float h = (float) Math.max(0, Math.sin(theta));
-        int r = (int) ((boss ? 46 : 26) * (1 - h) + 4 * h), g = (int) (10 * (1 - h) + 6 * h), b = (int) (52 * (1 - h) + 22 * h);
-        return (alpha << 24) | r << 16 | g << 8 | b;
+        int r = (int) ((boss ? 46 : 28) * (1 - h) + 5 * h), g = (int) (12 * (1 - h) + 7 * h), b = (int) (58 * (1 - h) + 26 * h);
+        return r << 16 | g << 8 | b;
     }
 
-    private static void quad(VertexConsumer vc, Matrix4f m, Vec3 a, Vec3 b, Vec3 c, Vec3 d, int argb) {
+    private static int mix(int from, int to, double t) {
+        int r = (int) ((from >> 16 & 255) * (1 - t) + (to >> 16 & 255) * t);
+        int g = (int) ((from >> 8 & 255) * (1 - t) + (to >> 8 & 255) * t);
+        int b = (int) ((from & 255) * (1 - t) + (to & 255) * t);
+        return r << 16 | g << 8 | b;
+    }
+
+    private static void quad(VertexConsumer vc, Matrix4f m, Vec3 a, Vec3 b, Vec3 c, Vec3 d, int rgb, Vec3 n) {
         for (Vec3 v : new Vec3[]{a, b, c, d}) {
-            vc.vertex(m, (float) v.x, (float) v.y, (float) v.z).color(argb >> 16 & 255, argb >> 8 & 255, argb & 255, argb >>> 24)
+            vc.vertex(m, (float) v.x, (float) v.y, (float) v.z).color(rgb >> 16 & 255, rgb >> 8 & 255, rgb & 255, 255)
                     .uv(0.5f, 0.5f).overlayCoords(net.minecraft.client.renderer.texture.OverlayTexture.NO_OVERLAY)
-                    .uv2(0xF000F0).normal(0, 1, 0).endVertex();
+                    .uv2(0xF000F0).normal((float) n.x, (float) n.y, (float) n.z).endVertex();
         }
     }
 
