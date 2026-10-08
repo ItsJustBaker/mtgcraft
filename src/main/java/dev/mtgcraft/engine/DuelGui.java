@@ -293,7 +293,22 @@ public final class DuelGui extends NetworkGuiGame {
     @Override
     public String showInputDialog(String message, String title, FSkinProp icon, String initialInput, List<String> inputOptions, boolean isNumeric) {
         if (inputOptions == null || inputOptions.isEmpty()) {
-            // Free text entry isn't supported at the table; take Card-Forge's suggested value.
+            // No free text at the table: numbers go to the number picker, and type names to a list of every type.
+            // (Returning nothing here used to make the card fizzle.)
+            if (isNumeric) {
+                int start = 0;
+                try {
+                    start = Integer.parseInt(initialInput == null ? "0" : initialInput.trim());
+                } catch (NumberFormatException ignored) {
+                    // no usable default
+                }
+                return String.valueOf(askNumber(message, Math.min(0, start), Math.max(999, start), null));
+            }
+            List<String> types = typeList(message + " " + title);
+            if (!types.isEmpty()) {
+                List<Integer> idx = ask(ChoiceRequest.pick(title, message, types, null, 1, 1, null));
+                if (idx != null && !idx.isEmpty()) return types.get(idx.get(0));
+            }
             return initialInput;
         }
         List<Integer> idx = ask(ChoiceRequest.pick(title, message, inputOptions, null, 1, 1, null));
@@ -325,6 +340,17 @@ public final class DuelGui extends NetworkGuiGame {
         ask(ChoiceRequest.pick("", message, labels, cards, 0, 0, null));
     }
 
+    /** Every creature type or card type, when a free-text question asks for one. */
+    private static List<String> typeList(String question) {
+        String q = question.toLowerCase(java.util.Locale.ROOT);
+        List<String> out = new ArrayList<>();
+        if (q.contains("creature type")) out.addAll(forge.card.CardType.getAllCreatureTypes());
+        else if (q.contains("card type")) for (forge.card.CardType.CoreType t : forge.card.CardType.CoreType.values()) out.add(t.name());
+        else if (q.contains("land type")) out.addAll(forge.card.CardType.getAllLandTypes());
+        java.util.Collections.sort(out);
+        return out;
+    }
+
     @Override
     public Integer getInteger(String message, int min, int max, boolean sortDesc) {
         return askNumber(message, min, max, null);
@@ -332,7 +358,9 @@ public final class DuelGui extends NetworkGuiGame {
 
     @Override
     public Integer getInteger(String message, int min, int max, int cutoff) {
-        return askNumber(message, min, Math.min(max, cutoff), null);
+        // The cutoff is where Card-Forge's own screens switch to an "Other..." text box; the number picker has no
+        // such limit (it used to stop at 9, so big X costs couldn't be paid).
+        return askNumber(message, min, Math.min(max, min + 999), null);
     }
 
     @Override

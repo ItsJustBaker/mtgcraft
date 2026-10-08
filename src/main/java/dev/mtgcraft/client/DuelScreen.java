@@ -1476,7 +1476,7 @@ public class DuelScreen extends Screen {
         boolean arenaToggle = ArenaRenderer.has(table);
         // Creative mode gets a cheat button that wins the duel on the spot.
         boolean creative = minecraft.player != null && minecraft.player.isCreative() && !duel.isOver();
-        int n = 3 + (arenaToggle ? 1 : 0) + (creative ? 1 : 0);
+        int n = 4 + (arenaToggle ? 1 : 0) + (creative ? 1 : 0);
         int bw = (w - (n - 1) * 3) / n;
         int bx = x;
         toolButton(g, "Log", bx, bw, mx, my, showLog, () -> showLog = !showLog);
@@ -1490,6 +1490,12 @@ public class DuelScreen extends Screen {
             toolButton(g, arenaView ? "3D" : "2D", bx, bw, mx, my, arenaView, this::toggleView);
             bx += bw + 3;
         }
+        // Stuck? Resend the game and clear stuck questions; a second press within 20 s ends the duel as a draw.
+        toolButton(g, "Fix", bx, bw, mx, my, false, () -> {
+            if (minecraft.player != null) minecraft.player.connection.sendCommand("mtgduel unstick");
+            info("Refreshing the duel. Still stuck? Press Fix again within 20 seconds to end it as a draw.");
+        });
+        bx += bw + 3;
         // Auto-pass on/off (also in Settings): gold when it's on.
         boolean auto = autoPassOn();
         toolButton(g, "Auto", bx, bw, mx, my, auto, () -> {

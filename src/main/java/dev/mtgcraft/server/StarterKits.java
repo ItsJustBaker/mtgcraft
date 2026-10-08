@@ -33,6 +33,8 @@ public final class StarterKits {
     public static final String[] NAMES = {"Selesnya Commander (white/green)", "Azorius Commander (white/blue)",
             "Dimir Commander (blue/black)", "Rakdos Commander (black/red)", "Gruul Commander (red/green)"};
     private static final String TAG = "mtgcraft_starter";
+    /** Set once the player has been given their Starter Kit item. */
+    private static final String TAG_KIT = "mtgcraft_starter_kit";
 
     private StarterKits() {}
 
@@ -45,9 +47,37 @@ public final class StarterKits {
 
     /** Called once the player's client has the card engine loaded. */
     public static void maybeOffer(ServerPlayer p) {
-        if (!MtgConfig.STARTER_KIT.get() || persisted(p).getBoolean(TAG)) return;
-        if (ForgeEngine.state() != ForgeEngine.State.READY) return;
+        // No menu forced on anyone: new players get a Starter Kit item (once) and open it when they like.
+        if (!MtgConfig.STARTER_KIT.get() || persisted(p).getBoolean(TAG) || persisted(p).getBoolean(TAG_KIT)) return;
+        persisted(p).putBoolean(TAG_KIT, true);
+        give(p, new net.minecraft.world.item.ItemStack(dev.mtgcraft.MtgCraft.STARTER_KIT.get()));
+        p.displayClientMessage(Component.literal("You got an MTGCraft Starter Kit: right-click it to pick your first deck.")
+                .withStyle(net.minecraft.ChatFormatting.GOLD), false);
+    }
+
+    /** Right-clicking a Starter Kit: show the starter deck menu. */
+    public static void open(ServerPlayer p) {
+        if (persisted(p).getBoolean(TAG)) {
+            p.displayClientMessage(Component.literal("You already picked your starter deck."), true);
+            return;
+        }
+        if (ForgeEngine.state() != ForgeEngine.State.READY) {
+            p.displayClientMessage(Component.literal("The card engine is still loading..."), true);
+            return;
+        }
         Net.toPlayer(p, new Packets.OfferStarter(List.of(NAMES)));
+    }
+
+    /** Uses up one Starter Kit from the inventory; false if the player has none. */
+    private static boolean useKit(ServerPlayer p) {
+        var inv = p.getInventory();
+        for (int i = 0; i < inv.getContainerSize(); i++) {
+            if (inv.getItem(i).is(dev.mtgcraft.MtgCraft.STARTER_KIT.get())) {
+                inv.getItem(i).shrink(1);
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -59,6 +89,7 @@ public final class StarterKits {
         boolean byType = tribe != null && !tribe.isEmpty();
         if (byType ? !Tribal.known(tribe) : Integer.bitCount(colors & 0x1F) == 0 || Integer.bitCount(colors & 0x1F) > 2) return;
         if (ForgeEngine.state() != ForgeEngine.State.READY) return;
+        if (!useKit(p)) return;
         persisted(p).putBoolean(TAG, true);
         var server = p.getServer();
         ForgeEngine.runOnUi(() -> {

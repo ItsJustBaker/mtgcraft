@@ -265,6 +265,45 @@ public final class GauntletDuels {
         return 1;
     }
 
+    /** When each player last pressed Fix (for the second press that ends the duel). */
+    private static final Map<UUID, Long> UNSTICK_AT = new HashMap<>();
+
+    /**
+     * The duel screen's Fix button: answer anything the game is stuck waiting on from this player with "no answer"
+     * and resend the whole game state. A second press within 20 seconds ends the duel as a draw (no penalty).
+     */
+    private static int unstick(ServerPlayer p) {
+        Duel d = BY_PLAYER.get(p.getUUID());
+        if (d == null || d.live == null) {
+            tell(p, "You're not in a duel.");
+            return 0;
+        }
+        long now = System.currentTimeMillis();
+        Long last = UNSTICK_AT.put(p.getUUID(), now);
+        if (last != null && now - last < 20_000) {
+            UNSTICK_AT.remove(p.getUUID());
+            for (UUID id : d.players.keySet()) {
+                ServerPlayer o = DuelHosting.online(p.getServer(), id);
+                if (o != null) tell(o, p.getGameProfile().getName() + " ended the stuck duel. It's a draw.");
+            }
+            end(d, new Matches.Result(true, -1, ""));
+            return 1;
+        }
+        Integer seatIdx = d.players.get(p.getUUID());
+        dev.mtgcraft.engine.net.RemoteSeat seat = seatIdx == null ? null : d.live.seat(seatIdx);
+        if (seat != null) {
+            ForgeEngine.runOnUi(() -> {
+                seat.cancelPending();
+                try {
+                    seat.gui.sendFullState();
+                } catch (RuntimeException ignored) {
+                    // the game is shutting down
+                }
+            });
+        }
+        return 1;
+    }
+
     private static boolean holdsGauntlet(ServerPlayer p) {
         for (ItemStack s : p.getInventory().items) if (s.getItem() instanceof GauntletItem) return true;
         return p.getOffhandItem().getItem() instanceof GauntletItem;
@@ -1046,6 +1085,7 @@ public final class GauntletDuels {
     @SubscribeEvent
     public static void commands(RegisterCommandsEvent event) {
         event.getDispatcher().register(Commands.literal("mtgduel")
+                .then(Commands.literal("unstick").executes(c -> c.getSource().getPlayer() == null ? 0 : unstick(c.getSource().getPlayer())))
                 .then(Commands.literal("deck").then(Commands.argument("slot", com.mojang.brigadier.arguments.IntegerArgumentType.integer(0))
                         .then(Commands.argument("mob", com.mojang.brigadier.arguments.IntegerArgumentType.integer())
                                 .executes(c -> c.getSource().getPlayer() == null ? 0 : pickDeck(c.getSource().getPlayer(),
@@ -1242,6 +1282,9 @@ public final class GauntletDuels {
     @SubscribeEvent
     public static void died(LivingDeathEvent event) {
         Duel d = BY_PLAYER.get(event.getEntity().getUUID());
-        if (d != null) d.forfeit(event.getEntity().getUUID());
+        if (d == null) return;
+        d.forfeit(event.getEntity().getUUID());
+        // Everyone on the players' side is gone: close the duel now (a stuck game would otherwise linger on screen).
+        if (d.forfeited.size() >= d.players.size()) end(d, new Matches.Result(true, -1, ""));
     }
 }

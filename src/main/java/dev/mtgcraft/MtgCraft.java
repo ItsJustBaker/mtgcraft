@@ -51,6 +51,8 @@ public class MtgCraft {
             () -> new dev.mtgcraft.item.UniversalDeckBoxItem(new Item.Properties().stacksTo(1)));
     public static final RegistryObject<Item> DUEL_GAUNTLET = ITEMS.register("duel_gauntlet",
             () -> new dev.mtgcraft.item.GauntletItem(new Item.Properties().stacksTo(1)));
+    public static final RegistryObject<Item> STARTER_KIT = ITEMS.register("starter_kit",
+            () -> new dev.mtgcraft.item.StarterKitItem(new Item.Properties().stacksTo(1)));
 
     /** The mod's own creative tab. */
     public static final RegistryObject<CreativeModeTab> TAB = TABS.register("mtgcraft", () -> CreativeModeTab.builder()
@@ -62,6 +64,7 @@ public class MtgCraft {
                 output.accept(DECK_BOX.get());
                 output.accept(UNIVERSAL_DECK_BOX.get());
                 output.accept(DUEL_GAUNTLET.get());
+                output.accept(STARTER_KIT.get());
                 output.accept(dev.mtgcraft.item.PackItem.ticket(false));
                 output.accept(dev.mtgcraft.item.PackItem.ticket(true));
                 for (dev.mtgcraft.engine.Packs.Theme t : dev.mtgcraft.engine.Packs.Theme.values()) {

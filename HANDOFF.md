@@ -240,3 +240,29 @@ Done this session:
 
 Still to do from the 0.2.6 list: card frame item (6 per block), Binder hold position + 3D flip-through Binder,
 commander/first-card art on deck boxes. Multiplayer (concede together, join) still untested with two real players.
+
+## Session 9 (2026-10-07, local on Zazael1's PC): 0.3.0 part 1
+**Permanent build tools now at `C:\Users\cruzd\mtgcraft-build`** (JDK 17, `mtgcraft-engine.jar`, `mtgres/`). Apply the
+local build.gradle/settings.gradle edits from Session 8 pointing there; never commit them.
+User's 0.3.0 list + decisions: `Downloads\updates 0.2.6 - 0.3.0.txt`. Card conditions: CUT. Booster art: download real
+pack art at runtime (not bundled). Arena is the feature they want most. **Rule: no update may break saves**
+(never rename registry ids, NBT tags or config keys). Weekly usage is tight (66%): batch work.
+
+Done (compiles; not yet tried in game):
+- Glove slimmed (user: too big, didn't reach the hand's end): `GloveRenderer` scale 4.4/7, 7.5/15, 4.7/5 at y 7.75.
+- Engine bridge (`DuelGui`): "Other..." numbers and capped numbers now use the number picker (X > 9 was fizzling);
+  free-text "creature/card/land type" questions show a list of every type (was returning nothing → card fizzled).
+- Fix button in the duel tool row → `/mtgduel unstick` (cancel stuck questions + resend full state; 2nd press within
+  20 s ends as a draw). A duel now ends at once when every player in it died.
+- `server/KeepOnDeath`: glove + active deck leave the inventory at LivingDeathEvent HIGHEST (before tombstones) and
+  come back on respawn/login (stored in persisted NBT).
+- Starter Kit item (`starter_kit`): given once on join instead of the forced menu; right-click opens the menu; choosing
+  uses up a kit. Existing players who already chose get nothing.
+- Arena v1: inside a duel arena the fog closes in over 1.5 s (world "pulled away") into deep-space colour, with 260
+  twinkling stars on a dome (`ArenaRenderer.stars`). Shader packs may override the fog; untested with Complementary.
+- Version 0.3.0. GameTests still OOM before reporting (pre-existing).
+
+Next (user's order): card names needed for bugs 46 (land not entering tapped) and 48 (5/2 vs 2/1); Jumpstart starter
+decks; player duel modes/stakes; difficulty; hand-card zoom; deck UI revamp; packs/loot; Champion villager + World Cup
+boss; quests; runtime booster art; arena v2 (floor/visuals, shaders); AI orb teammate; holo parties; Duel Disk glove;
+join "Index 0 out of bounds" still unexplained (ask for the error with -Dforge.logging.console.level=debug).

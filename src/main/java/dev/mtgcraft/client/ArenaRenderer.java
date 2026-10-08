@@ -56,7 +56,24 @@ public final class ArenaRenderer {
     private ArenaRenderer() {}
 
     public static void put(Packets.Arena arena) {
+        if (!ARENAS.containsKey(arena.key())) OPENED.put(arena.key(), System.currentTimeMillis());
         ARENAS.put(arena.key(), arena);
+    }
+
+    /** When each arena first appeared: the world fades away over {@link #PULL_MS} from then. */
+    private static final Map<BlockPos, Long> OPENED = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final float PULL_MS = 1500f;
+
+    /** 0 to 1: how far the world has been pulled away around this arena (eased). */
+    private static float pull(Packets.Arena a) {
+        Long t = OPENED.get(a.key());
+        float x = t == null ? 1f : Math.min(1f, (System.currentTimeMillis() - t) / PULL_MS);
+        return x * x * (3 - 2 * x);
+    }
+
+    /** Duel arenas (not the small table-top ones) become a pocket of space. */
+    private static boolean voidArena(Packets.Arena a) {
+        return a.radius() >= 3.5f;
     }
 
     public static boolean has(BlockPos key) {
@@ -89,8 +106,9 @@ public final class ArenaRenderer {
     public static void fogColor(ViewportEvent.ComputeFogColor event) {
         Packets.Arena a = around(event.getCamera().getPosition());
         if (a == null) return;
-        float mix = 0.92f;
-        float r = a.boss() ? 0.12f : 0.02f, g = 0.03f, b = a.boss() ? 0.16f : 0.10f;
+        // Deep space; a boss arena glows a little purple.
+        float mix = voidArena(a) ? 0.92f + 0.08f * pull(a) : 0.92f;
+        float r = a.boss() ? 0.10f : 0.01f, g = 0.01f, b = a.boss() ? 0.14f : 0.05f;
         event.setRed(event.getRed() * (1 - mix) + r * mix);
         event.setGreen(event.getGreen() * (1 - mix) + g * mix);
         event.setBlue(event.getBlue() * (1 - mix) + b * mix);
@@ -100,9 +118,57 @@ public final class ArenaRenderer {
     public static void fog(ViewportEvent.RenderFog event) {
         Packets.Arena a = around(event.getCamera().getPosition());
         if (a == null) return;
-        event.setNearPlaneDistance(a.radius() * 1.1f);
-        event.setFarPlaneDistance(a.radius() * 3.2f);
+        // The world beyond the arena is pulled away: the fog closes in from normal view distance to just past the stars.
+        float p = voidArena(a) ? pull(a) : 0;
+        float near = a.radius() * 1.1f, far = a.radius() * (voidArena(a) ? 2.0f : 3.2f);
+        event.setNearPlaneDistance(near + (event.getNearPlaneDistance() - near) * (1 - p));
+        event.setFarPlaneDistance(far + (event.getFarPlaneDistance() - far) * (1 - p));
         event.setCanceled(true);
+    }
+
+    // ------------------------------------------------------------------ the void: a dome of stars around the arena
+
+    private static final int STARS = 260;
+
+    @SubscribeEvent
+    public static void stars(RenderLevelStageEvent event) {
+        if (event.getStage() != RenderLevelStageEvent.Stage.AFTER_TRANSLUCENT_BLOCKS || ARENAS.isEmpty()) return;
+        Camera cam = event.getCamera();
+        Packets.Arena a = around(cam.getPosition());
+        if (a == null || !voidArena(a)) return;
+        float p = pull(a);
+        if (p <= 0.01f) return;
+        long now = System.currentTimeMillis();
+        Vec3 c = new Vec3(a.x(), a.y(), a.z()).subtract(cam.getPosition());
+        org.joml.Vector3f left = cam.getLeftVector(), up = cam.getUpVector();
+        Matrix4f m = event.getPoseStack().last().pose();
+        MultiBufferSource.BufferSource buffers = Minecraft.getInstance().renderBuffers().bufferSource();
+        VertexConsumer vc = buffers.getBuffer(RenderType.lightning());
+        double r = a.radius() * 1.35;
+        java.util.Random rng = new java.util.Random(a.key().asLong());
+        for (int i = 0; i < STARS; i++) {
+            // Evenly spread over the upper part of a sphere (a little below the floor too), slowly turning.
+            double yy = rng.nextDouble() * 1.15 - 0.15, ang = rng.nextDouble() * Math.PI * 2 + now / 90000.0;
+            double rr = Math.sqrt(Math.max(0, 1 - yy * yy));
+            double sx = c.x + Math.cos(ang) * rr * r, sy = c.y + yy * r, sz = c.z + Math.sin(ang) * rr * r;
+            float size = (float) (0.04 + rng.nextDouble() * 0.09) * a.radius() / 8f;
+            float tw = 0.55f + 0.45f * (float) Math.sin(now / (300.0 + rng.nextInt(700)) + i);
+            int alpha = (int) (255 * p * tw);
+            int tint = rng.nextInt(5);
+            int rgb = tint == 0 ? 0xB0C8FF : tint == 1 ? 0xFFE6B0 : 0xFFFFFF;
+            int col = (alpha << 24) | rgb;
+            float lx = left.x() * size, ly = left.y() * size, lz = left.z() * size;
+            float ux = up.x() * size, uy = up.y() * size, uz = up.z() * size;
+            star(vc, m, sx - lx - ux, sy - ly - uy, sz - lz - uz, col);
+            star(vc, m, sx + lx - ux, sy + ly - uy, sz + lz - uz, col);
+            star(vc, m, sx + lx + ux, sy + ly + uy, sz + lz + uz, col);
+            star(vc, m, sx - lx + ux, sy - ly + uy, sz - lz + uz, col);
+        }
+        buffers.endBatch(RenderType.lightning());
+    }
+
+    private static void star(VertexConsumer vc, Matrix4f m, double x, double y, double z, int argb) {
+        vc.vertex(m, (float) x, (float) y, (float) z).color(argb >> 16 & 255, argb >> 8 & 255, argb & 255, argb >>> 24).endVertex();
     }
 
     // ------------------------------------------------------------------ the field

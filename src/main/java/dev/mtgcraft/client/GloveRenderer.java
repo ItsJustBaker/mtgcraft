@@ -40,9 +40,10 @@ public final class GloveRenderer {
         float cx = ("slim".equals(player.getModelName()) ? 0.5f : 1f) * (right ? -1 : 1);
         // Wrapped around the hand: a bit wider than the arm (and its sleeve) all round, cuff at the wrist, fingertips
         // level with the end of the arm; thumb forward. The model is 7px wide (x), 5px deep (z), 15px long (y).
-        pose.translate(cx / 16f, 6.9f / 16f, 0);
+        // Snug: just over the arm's 4px (the sleeve layer is 4.5px), running from the wrist (y 4) to past the hand (y 11.5).
+        pose.translate(cx / 16f, 7.75f / 16f, 0);
         pose.mulPose(Axis.YP.rotationDegrees(90));
-        pose.scale(5.4f / 7f, 7.8f / 15f, 5.4f / 5f);
+        pose.scale(4.4f / 7f, 7.5f / 15f, 4.7f / 5f);
         Minecraft.getInstance().getItemRenderer().renderStatic(player, glove, ItemDisplayContext.NONE, !right,
                 pose, buffers, player.level(), light, OverlayTexture.NO_OVERLAY, player.getId());
         pose.popPose();
