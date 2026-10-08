@@ -472,6 +472,10 @@ public final class DuelGui extends NetworkGuiGame {
     @Override
     public Map<CardView, Integer> assignCombatDamage(CardView attacker, List<CardView> blockers, int damage,
                                                      GameEntityView defender, boolean overrideOrder, boolean maySkip) {
+        // Card-Forge always passes the defender; damage may only go past the blockers with trample (its desktop
+        // dialog checks this itself). Without it, every point goes to the blockers.
+        boolean trample = attacker != null && attacker.getCurrentState() != null && attacker.getCurrentState().hasTrample();
+        if (!trample) defender = null;
         Map<CardView, Integer> auto = autoCombatDamage(attacker, blockers, damage, defender);
         List<String> labels = new ArrayList<>();
         List<CardView> cards = new ArrayList<>();

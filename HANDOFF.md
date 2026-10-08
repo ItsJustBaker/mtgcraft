@@ -339,3 +339,4 @@ for the new themes, teleport-mid-duel bug, bugs 46/48 (card names).
   id): on a Magic Table within 12 blocks it unlocks Reward duels (or carry it). Quest rewards: 2-3 packs, Picks.
 - Engine audit: every IGuiGame prompt is handled (one/many/insertInList fall back to getChoices). Blocking flow is
   correct (attacker then blocker); evasion (flying, menace...) is the engine's rules. Still need card names for 46/48.
+- Real rules bug: blocked attackers could assign damage to the player without trample (Card-Forge always passes the defender; its desktop dialog checks trample). `DuelGui.assignCombatDamage` now drops the defender unless `hasTrample()`.
