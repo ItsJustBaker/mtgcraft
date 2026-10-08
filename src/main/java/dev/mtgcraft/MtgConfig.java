@@ -20,6 +20,8 @@ public final class MtgConfig {
     public static final ForgeConfigSpec.BooleanValue GROUP_FIGHTS;
     public static final ForgeConfigSpec.BooleanValue QUICK_DUELS;
     public static final ForgeConfigSpec.IntValue GRACE_SECONDS;
+    public static final ForgeConfigSpec.IntValue DIFFICULTY;
+    public static final ForgeConfigSpec.DoubleValue CHEST_PACK_CHANCE;
     public static final ForgeConfigSpec.IntValue BOSS_LIFE;
     public static final ForgeConfigSpec.IntValue BOSS_LIFE_PER_EXTRA_PLAYER;
     public static final ForgeConfigSpec.IntValue BOSS_SOLO_PACKS;
@@ -66,6 +68,10 @@ public final class MtgConfig {
         b.push("survival");
         STARTER_KIT = b.comment("Offer new players a starter deck (Deck Box, Binder, Duel Gauntlet and a few packs).")
                 .define("starterKit", true);
+        DIFFICULTY = b.comment("Mob opponents: -2 very easy, -1 easy, 0 normal (true RNG), 1 hard, 2 very hard. Changes their life and deck strength.")
+                .defineInRange("difficulty", 0, -2, 2);
+        CHEST_PACK_CHANCE = b.comment("Chance a loot chest (vanilla or modded) holds a themed booster pack.")
+                .defineInRange("chestPackChance", 0.12, 0, 1);
         b.pop();
         SPEC = b.build();
     }

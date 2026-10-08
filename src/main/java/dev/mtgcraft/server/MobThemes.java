@@ -102,6 +102,11 @@ public final class MobThemes {
         map(Theme.WITHER, "wither");
         map(Theme.ENDER_DRAGON, "ender_dragon");
         map(Theme.OVERWORLD, "rabbit");
+        map(Theme.RODENT, "silverfish", "endermite");
+        map(Theme.SPIDER, "spider", "cave_spider");
+        map(Theme.PHANTOM, "phantom");
+        map(Theme.LUSH, "frog", "axolotl", "tadpole");
+        map(Theme.TRAIL, "sniffer", "camel");
     }
 
     /** All the Mods mobs: each mod gets its own pack (only when installed, see {@link Theme#available()}). */
@@ -128,6 +133,13 @@ public final class MobThemes {
             case "aether" -> Theme.AETHER;
             case "blue_skies" -> Theme.SKIES;
             case "allthemodium" -> Theme.ALLTHEMODIUM;
+            case "endermanoverhaul" -> Theme.ENDERMEN;
+            case "eidolon" -> Theme.NECRO;
+            case "naturalist" -> Theme.SAFARI;
+            case "quark" -> Theme.QUARK;
+            case "forbidden_arcanus" -> Theme.FORBIDDEN;
+            case "productivebees" -> Theme.HIVE;
+            case "ars_elemental" -> Theme.ARCANE;
             default -> null;
         };
     }

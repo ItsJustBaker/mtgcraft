@@ -32,6 +32,39 @@ public final class BoosterTrades {
     }
 
     @SubscribeEvent
+    public static void cardTrades(VillagerTradesEvent event) {
+        if (!enabled()) return;
+        if (event.getType() == VillagerProfession.LIBRARIAN || event.getType() == VillagerProfession.CLERIC
+                || event.getType() == VillagerProfession.CARTOGRAPHER) {
+            event.getTrades().get(1).add(cardForCard(false));
+            event.getTrades().get(3).add(cardForCard(true));
+        }
+    }
+
+    /**
+     * The villager wants one particular card (plus a few emeralds) for one of theirs: a common or uncommon for an
+     * uncommon, or (at higher levels) an uncommon for a rare or mythic. Both come from the same themed pack.
+     */
+    private static VillagerTrades.ItemListing cardForCard(boolean rare) {
+        return (trader, random) -> {
+            if (ForgeEngine.state() != ForgeEngine.State.READY) return null;
+            Packs.Theme[] themes = Packs.Theme.values();
+            java.util.List<Packs.Pull> pulls = Packs.openTheme(themes[random.nextInt(themes.length)]);
+            Packs.Pull want = null, give = null;
+            for (Packs.Pull p : pulls) {
+                char r = dev.mtgcraft.engine.Cards.rarity(p.card());
+                boolean low = r == 'C' || (rare && r == 'U');
+                boolean high = rare ? r == 'R' || r == 'M' : r == 'U';
+                if (low && want == null) want = p;
+                else if (high && give == null && (want == null || !p.card().getName().equals(want.card().getName()))) give = p;
+            }
+            if (want == null || give == null) return null;
+            return new MerchantOffer(dev.mtgcraft.item.CardItem.of(want.card(), false, 1), new ItemStack(Items.EMERALD, rare ? 6 : 2),
+                    dev.mtgcraft.item.CardItem.of(give.card(), give.foil(), 1), 3, rare ? 15 : 5, 0.05f);
+        };
+    }
+
+    @SubscribeEvent
     public static void villager(VillagerTradesEvent event) {
         if (!enabled() || event.getType() != VillagerProfession.LIBRARIAN) return;
         event.getTrades().get(2).add(booster(8, 6));

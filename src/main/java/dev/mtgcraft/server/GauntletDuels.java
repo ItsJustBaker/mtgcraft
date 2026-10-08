@@ -73,6 +73,8 @@ public final class GauntletDuels {
         boolean boss;
         /** A friendly player-vs-player duel: nobody dies, the winner is announced. */
         boolean pvp;
+        /** Player duels: what they play for (FRIENDLY, DEATH, ANTE, REWARD). */
+        String stake = "FRIENDLY";
         /** Human players in seat order, with their seat index. */
         final Map<UUID, Integer> players = new LinkedHashMap<>();
         final Set<UUID> forfeited = new HashSet<>();
@@ -531,6 +533,15 @@ public final class GauntletDuels {
             int life = MobThemes.quickLife(tier);
             for (MatchSetup.Seat st : setup.seats) if (st.ai) st.startingLife = life;
         }
+        // Difficulty: -2 halves the mobs' life, +2 gives them half again as much (their decks change in addMobSeats).
+        int diff = MtgConfig.DIFFICULTY.get();
+        if (diff != 0) {
+            for (MatchSetup.Seat st : setup.seats) {
+                if (!st.ai) continue;
+                int base = st.startingLife > 0 ? st.startingLife : commander ? 40 : 20;
+                st.startingLife = Math.max(1, Math.round(base * (1 + 0.25f * diff)));
+            }
+        }
         d.setup = setup;
         takeSeats(d, player, seatEntities);
         stopTargeting(d.level, d.center, d.radius + 24, d.players.keySet());
@@ -768,7 +779,7 @@ public final class GauntletDuels {
             int dup = names.merge(name, 1, Integer::sum);
             if (dup > 1) name += " " + dup;
             setup.seats.add(new MatchSetup.Seat(true, name, null,
-                    DeckChoice.theme(MobThemes.theme(face), packs > 0 ? packs : MobThemes.packs(face), commander, library), team));
+                    DeckChoice.theme(MobThemes.theme(face), Math.max(3, (packs > 0 ? packs : MobThemes.packs(face)) + MtgConfig.DIFFICULTY.get()), commander, library), team));
             seatEntities.add(m);
         }
     }
@@ -858,11 +869,12 @@ public final class GauntletDuels {
             return;
         }
         if (d.pvp) {
-            // A friendly duel: no stakes, just bragging rights.
+            // Player duels: the winner is announced, then the stakes (if any) are paid.
             String winner = result.winnerName() == null || result.winnerName().isEmpty() ? "Someone" : result.winnerName();
             for (ServerPlayer p : online) {
                 p.sendSystemMessage(Component.literal(winner + " wins the duel!").withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD));
             }
+            applyStakes(d, result.winnerName(), online);
             return;
         }
         if (result.winningTeam() == d.playerTeam()) {
@@ -877,6 +889,8 @@ public final class GauntletDuels {
             for (Mob m : d.everyone) DEFEATED.add(m.getUUID());
             for (Mob m : d.everyone) {
                 if (!m.isAlive()) continue;
+                // A Champion is never killed: they hand over a prize instead (below).
+                if (Champions.is(m)) continue;
                 if (m instanceof net.minecraft.world.entity.boss.enderdragon.EnderDragon dragon) {
                     // The dragon pays out its XP during its death animation: work it out now and catch those orbs.
                     var fight = dragon.getDragonFight();
@@ -923,10 +937,15 @@ public final class GauntletDuels {
                 String sub = (d.players.size() > 1 ? d.teamName + " wins!" : "You beat " + String.join(", ", seatNames(d)) + ".")
                         + (myXp > 0 ? "  +" + myXp + " XP" : "");
                 Net.toPlayer(p, new Packets.Rewards("Victory!", sub, loot));
+                if (d.mobs.stream().anyMatch(Champions::is)) Champions.reward(p);
             }
             return;
         }
         Mob victor = d.mobs.isEmpty() ? null : d.mobs.get(0);
+        if (d.mobs.stream().anyMatch(Champions::is)) {
+            for (ServerPlayer p : online) tell(p, "The Champion wins, and helps you back up. Try again any time!");
+            return;
+        }
         for (ServerPlayer p : online) {
             // The safe time would cancel the penalty itself (the hit comes from the mob): lift it for the hit, and
             // give it back to anyone who survives it.
@@ -973,6 +992,92 @@ public final class GauntletDuels {
             join(from, to);
             return;
         }
+        // First: what kind of duel? (format and stakes)
+        String n = to.getGameProfile().getName();
+        Net.toPlayer(from, new Packets.Prompt("Duel " + n, "Pick the format and what you play for. " + n + " sees it before accepting.",
+                List.of("Friendly (Commander)", "Friendly (Classic)", "To the death", "Ante: 3 cards each", "Reward duel (packs)", "Cancel"),
+                List.of("/mtgduel challenge " + n + " FRIENDLY C", "/mtgduel challenge " + n + " FRIENDLY K", "/mtgduel challenge " + n + " DEATH C",
+                        "/mtgduel challenge " + n + " ANTE C", "/mtgduel challenge " + n + " REWARD C", ""), 30));
+    }
+
+    /** Pays out a player duel's stakes once the game has a winner. */
+    private static void applyStakes(Duel d, String winnerName, List<ServerPlayer> online) {
+        if ("FRIENDLY".equals(d.stake) || winnerName == null) return;
+        ServerPlayer w = null;
+        for (ServerPlayer p : online) if (p.getGameProfile().getName().equals(winnerName)) w = p;
+        if (w == null) return;
+        String wn = w.getGameProfile().getName();
+        for (ServerPlayer l : online) {
+            if (l == w) continue;
+            switch (d.stake) {
+                case "DEATH" -> {
+                    tell(l, "You lost a duel to the death...");
+                    l.hurt(l.damageSources().playerAttack(w), Float.MAX_VALUE);
+                    if (l.isAlive()) {
+                        l.invulnerableTime = 0;
+                        l.kill();
+                    }
+                }
+                case "ANTE" -> {
+                    ItemStack box = DeckBoxItem.find(l);
+                    List<dev.mtgcraft.item.CardBag.Entry> pool = new ArrayList<>();
+                    if (box.getItem() instanceof DeckBoxItem) {
+                        for (var e : dev.mtgcraft.item.CardBag.entries(box)) if (!DeckBoxItem.isBasicKey(e.key())) pool.add(e);
+                    }
+                    java.util.Collections.shuffle(pool);
+                    int taken = 0;
+                    for (var e : pool) {
+                        if (taken == 3) break;
+                        var pc = dev.mtgcraft.engine.Cards.card(e.key());
+                        if (pc == null || dev.mtgcraft.item.CardBag.remove(box, e.key(), e.foil(), 1) == 0) continue;
+                        ItemStack card = dev.mtgcraft.item.CardItem.of(pc, e.foil(), 1);
+                        if (!w.getInventory().add(card)) w.drop(card, false);
+                        taken++;
+                    }
+                    tell(l, wn + " won " + taken + " of your cards (the ante).");
+                    tell(w, "You won " + taken + " cards from " + l.getGameProfile().getName() + " (the ante).");
+                }
+                case "REWARD" -> {
+                    long day = w.level().getDayTime() / 24000L;
+                    String key = w.getUUID() + "|" + l.getUUID();
+                    if (Long.valueOf(day).equals(REWARDED.get(key))) {
+                        tell(w, "You already won a reward from " + l.getGameProfile().getName() + " today.");
+                        continue;
+                    }
+                    REWARDED.put(key, day);
+                    var themes = dev.mtgcraft.engine.Packs.Theme.values();
+                    for (int i = 0; i < 2; i++) {
+                        ItemStack pack = dev.mtgcraft.item.PackItem.themed(themes[w.getRandom().nextInt(themes.length)], 1);
+                        if (!w.getInventory().add(pack)) w.drop(pack, false);
+                    }
+                    tell(w, "Reward: 2 booster packs for beating " + l.getGameProfile().getName() + ".");
+                }
+                default -> { }
+            }
+        }
+    }
+
+    /** What each pending invite plays for: invitee -> inviter -> "STAKE FORMAT". */
+    private static final Map<UUID, Map<UUID, String>> STAKES = new HashMap<>();
+    /** Reward duels already won today: "winner|loser" -> Minecraft day. */
+    private static final Map<String, Long> REWARDED = new HashMap<>();
+
+    private static String stakeText(String stake) {
+        return switch (stake) {
+            case "DEATH" -> "a duel to the death (the loser dies)";
+            case "ANTE" -> "an ante duel (3 random cards from each deck; the winner takes them all)";
+            case "REWARD" -> "a reward duel (the winner gets booster packs, once a day)";
+            default -> "a friendly duel (nobody dies)";
+        };
+    }
+
+    /** The second step of a player challenge, from the duel-type menu. */
+    private static void challengeWith(ServerPlayer from, ServerPlayer to, String stake, boolean commander) {
+        if (!List.of("FRIENDLY", "DEATH", "ANTE", "REWARD").contains(stake)) return;
+        if ("REWARD".equals(stake) && !Champions.hasCup(from)) {
+            tell(from, "Reward duels need the MTG World Cup: beat a Village Champion to win it.");
+            return;
+        }
         String toName = to.getGameProfile().getName(), fromName = from.getGameProfile().getName();
         if (inDuel(from.getUUID()) || waiting(from.getUUID())) {
             tell(from, "You're already in a duel.");
@@ -988,11 +1093,13 @@ public final class GauntletDuels {
         }
         if (deckOf(from, false) == null) return;
         INVITES.computeIfAbsent(to.getUUID(), k -> new HashMap<>()).put(from.getUUID(), tick + INVITE_TICKS);
-        to.sendSystemMessage(Component.literal(fromName + " challenges you to a friendly duel! ").withStyle(ChatFormatting.GOLD)
-                .append(button("[Accept]", "/mtgduel accept " + fromName, ChatFormatting.GREEN, "Duel " + fromName + " (nobody dies)"))
+        STAKES.computeIfAbsent(to.getUUID(), k -> new HashMap<>()).put(from.getUUID(), stake + " " + (commander ? "C" : "K"));
+        String what = stakeText(stake) + (commander ? ", Commander" : ", classic");
+        to.sendSystemMessage(Component.literal(fromName + " challenges you to " + what + "! ").withStyle(ChatFormatting.GOLD)
+                .append(button("[Accept]", "/mtgduel accept " + fromName, ChatFormatting.GREEN, "Duel " + fromName))
                 .append(Component.literal(" "))
                 .append(button("[Decline]", "/mtgduel decline " + fromName, ChatFormatting.RED, "No thanks")));
-        Net.toPlayer(to, new Packets.Prompt("Duel challenge!", fromName + " challenges you to a friendly duel. Nobody dies; the winner gets bragging rights.",
+        Net.toPlayer(to, new Packets.Prompt("Duel challenge!", fromName + " challenges you to " + what + ".",
                 List.of("Accept", "Decline"), List.of("/mtgduel accept " + fromName, "/mtgduel decline " + fromName), INVITE_TICKS / 20));
         tell(from, "Challenge sent to " + toName + ". They have 60 seconds to accept.");
     }
@@ -1005,6 +1112,9 @@ public final class GauntletDuels {
 
     public static void accept(ServerPlayer to, ServerPlayer from) {
         String fromName = from.getGameProfile().getName();
+        Map<UUID, String> st = STAKES.get(to.getUUID());
+        String terms = st == null ? null : st.remove(from.getUUID());
+        if (terms == null) terms = "FRIENDLY C";
         if (!takeInvite(to, from)) {
             tell(to, "That challenge has expired. Right-click " + fromName + " with your gauntlet to challenge them.");
             return;
@@ -1016,6 +1126,7 @@ public final class GauntletDuels {
         // Only nearby players get pulled onto the stage.
         if (from.level() != to.level() || from.distanceTo(to) > JOIN_RANGE) {
             INVITES.computeIfAbsent(to.getUUID(), k -> new HashMap<>()).put(from.getUUID(), tick + INVITE_TICKS);
+            STAKES.computeIfAbsent(to.getUUID(), k -> new HashMap<>()).put(from.getUUID(), terms);
             tell(to, "Get closer to " + fromName + " (within " + (int) JOIN_RANGE + " blocks), then accept again.");
             return;
         }
@@ -1027,7 +1138,8 @@ public final class GauntletDuels {
             tell(from, "You need a ready Deck Box to duel " + to.getGameProfile().getName() + ".");
             return;
         }
-        startPvp(from, theirs, to, mine);
+        String[] t = terms.split(" ");
+        startPvp(from, theirs, to, mine, t[0], t.length < 2 || t[1].equals("C"));
     }
 
     public static void decline(ServerPlayer to, ServerPlayer from) {
@@ -1035,15 +1147,16 @@ public final class GauntletDuels {
         tell(to, "Declined.");
     }
 
-    private static void startPvp(ServerPlayer a, DeckChoice da, ServerPlayer b, DeckChoice db) {
+    private static void startPvp(ServerPlayer a, DeckChoice da, ServerPlayer b, DeckChoice db, String stake, boolean wantCommander) {
         Duel d = new Duel();
         d.pvp = true;
+        d.stake = stake;
         d.level = a.serverLevel();
         d.radius = 5f + (float) Math.max(0, Math.max(a.getBbWidth(), b.getBbWidth()) - 1) * 1.3f;
         Vec3 mid = a.position().add(b.position()).scale(0.5);
         d.center = new Vec3(mid.x, stageHeight(d.level, mid, d.radius + 1.5f), mid.z);
 
-        boolean commander = MtgConfig.DUEL_MODE.get() == MtgConfig.DuelMode.COMMANDER;
+        boolean commander = wantCommander;
         if (commander && !(commanderReady(da) && commanderReady(db))) {
             commander = false;
             for (ServerPlayer p : List.of(a, b)) tell(p, "Classic duel: Commander needs a 100-card deck with a commander for both of you.");
@@ -1085,6 +1198,10 @@ public final class GauntletDuels {
     @SubscribeEvent
     public static void commands(RegisterCommandsEvent event) {
         event.getDispatcher().register(Commands.literal("mtgduel")
+                .then(Commands.literal("challenge").then(Commands.argument("player", StringArgumentType.word())
+                        .then(Commands.argument("stake", StringArgumentType.word()).then(Commands.argument("format", StringArgumentType.word())
+                                .executes(c -> withPlayer(c.getSource(), StringArgumentType.getString(c, "player"), (me, other) -> challengeWith(me, other,
+                                        StringArgumentType.getString(c, "stake"), !"K".equals(StringArgumentType.getString(c, "format")))))))))
                 .then(Commands.literal("unstick").executes(c -> c.getSource().getPlayer() == null ? 0 : unstick(c.getSource().getPlayer())))
                 .then(Commands.literal("deck").then(Commands.argument("slot", com.mojang.brigadier.arguments.IntegerArgumentType.integer(0))
                         .then(Commands.argument("mob", com.mojang.brigadier.arguments.IntegerArgumentType.integer())

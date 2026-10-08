@@ -657,9 +657,10 @@ public class DuelScreen extends Screen {
 
             float tx = p.x, ty = p.y, trot = p.rot, tscale = 1;
             if (p == hovered && (p.zone == Zone.HAND || p.zone == Zone.COMMAND)) {
-                ty = height - p.h - 6;
+                // Lift the card right up, big (and so drawn from the sharp texture): readable without the zoom panel.
+                tscale = 1.9f;
+                ty = height - p.h * tscale - 6;
                 trot = 0;
-                tscale = 1.12f;
             } else if (p == hovered) {
                 tscale = 1.06f;
             }

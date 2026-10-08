@@ -85,7 +85,18 @@ public final class Packs {
         DRAGONFIRE("Dragonfire Pack", "R", new String[]{"Dragon", "Wyvern", "Hydra", "Gorgon", "Cyclops"}, new String[]{}, "iceandfire"),
         AETHER("Aether Pack", "W", new String[]{"Angel", "Bird", "Pegasus", "Spirit"}, new String[]{"flying"}, "aether"),
         SKIES("Skies Pack", "UW", new String[]{"Spirit", "Elemental", "Bird"}, new String[]{"flying"}, "blue_skies"),
-        ALLTHEMODIUM("Allthemodium Pack", "BR", new String[]{"Golem", "Demon", "Dragon"}, new String[]{"indestructible"}, "allthemodium");
+        ALLTHEMODIUM("Allthemodium Pack", "BR", new String[]{"Golem", "Demon", "Dragon"}, new String[]{"indestructible"}, "allthemodium"),
+        // 0.3.0: new themes go at the end, so saved packs (stored by name) and the pack art order stay as they were.
+        RODENT("Rodent Pack", "BG", new String[]{"Rat", "Squirrel", "Rabbit", "Mouse", "Weasel", "Otter"}, new String[]{"rat"}),
+        SPIDER("Spider Pack", "BG", new String[]{"Spider", "Insect"}, new String[]{"reach", "deathtouch"}),
+        PHANTOM("Phantom Pack", "WU", new String[]{"Spirit", "Specter", "Bat", "Bird"}, new String[]{"flying"}),
+        LUSH("Lush Pack", "GU", new String[]{"Frog", "Salamander", "Fish", "Plant"}, new String[]{"untap"}),
+        TRAIL("Trail Pack", "GW", new String[]{"Camel", "Beast", "Dinosaur"}, new String[]{"discover", "explore"}),
+        ENDERMEN("Enderman Pack", "UB", new String[]{"Horror", "Shapeshifter", "Eldrazi"}, new String[]{"exile"}, "endermanoverhaul"),
+        NECRO("Eidolon Pack", "BW", new String[]{"Wraith", "Zombie", "Spirit", "Cleric"}, new String[]{"sacrifice"}, "eidolon"),
+        SAFARI("Naturalist Pack", "GR", new String[]{"Elephant", "Cat", "Bear", "Snake", "Lizard", "Bird"}, new String[]{"fight"}, "naturalist"),
+        QUARK("Quark Pack", "UG", new String[]{"Crab", "Elemental", "Dog", "Wraith"}, new String[]{"scry"}, "quark"),
+        FORBIDDEN("Forbidden Pack", "BU", new String[]{"Demon", "Spirit", "Wizard"}, new String[]{"pay life"}, "forbidden_arcanus");
 
         public final String label;
         final String colors;

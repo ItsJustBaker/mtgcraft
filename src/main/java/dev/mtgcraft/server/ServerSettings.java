@@ -32,6 +32,8 @@ public final class ServerSettings {
         out.add(new Packets.Setting("themedPackChance", "Themed pack drops", trim(MtgConfig.PACK_DROP_CHANCE.get()), List.of(CHANCES)));
         out.add(new Packets.Setting("setPackChance", "Set pack drops", trim(MtgConfig.SET_PACK_DROP_CHANCE.get()), List.of(CHANCES)));
         out.add(new Packets.Setting("starterKit", "Starter deck for new players", String.valueOf(MtgConfig.STARTER_KIT.get()), List.of("true", "false")));
+        out.add(new Packets.Setting("difficulty", "Mob difficulty", String.valueOf(MtgConfig.DIFFICULTY.get()), List.of("-2", "-1", "0", "1", "2")));
+        out.add(new Packets.Setting("chestPackChance", "Packs in loot chests", trim(MtgConfig.CHEST_PACK_CHANCE.get()), List.of(CHANCES)));
         return out;
     }
 
@@ -53,6 +55,8 @@ public final class ServerSettings {
             switch (key) {
                 case "duelMode" -> MtgConfig.DUEL_MODE.set(MtgConfig.DuelMode.valueOf(value));
                 case "lossPenalty" -> MtgConfig.LOSS_PENALTY.set(MtgConfig.LossPenalty.valueOf(value));
+                case "difficulty" -> MtgConfig.DIFFICULTY.set(Math.max(-2, Math.min(2, Integer.parseInt(value))));
+                case "chestPackChance" -> MtgConfig.CHEST_PACK_CHANCE.set(Math.max(0, Math.min(1, Double.parseDouble(value))));
                 case "groupFights" -> MtgConfig.GROUP_FIGHTS.set(Boolean.parseBoolean(value));
                 case "quickDuels" -> MtgConfig.QUICK_DUELS.set(Boolean.parseBoolean(value));
                 case "graceSeconds" -> MtgConfig.GRACE_SECONDS.set(Math.max(0, Math.min(120, Integer.parseInt(value))));
