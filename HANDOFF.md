@@ -322,3 +322,4 @@ for the new themes, teleport-mid-duel bug, bugs 46/48 (card names).
   normals), tiles flipping in from the floor up over 1.6 s with a violet edge, stars after 60%. Duel Disk blade
   shortened to 11px / 3 zones ("too long"); glove overlay now covers only the hand (last 4px).
 - Shaders placed the solid dome wrong (a small ball elsewhere): its own endBatch(type) flush ran outside Iris's entity context. Now drawn from render() before the single buffers.endBatch(), as entityTranslucent like the floor, normal (0,1,0). Void-arena fog eased to 2.6R..4.2R (it hid the enemy).
+- Join error still unexplained; added `NetDebugLog` (common setup): Minecraft's Connection + Forge network loggers at DEBUG to logs/mtgcraft-network.log, so the full 'Internal Exception' stack trace gets written (ATM9 has no debug.log). Next step: read that file from the player who got kicked.
