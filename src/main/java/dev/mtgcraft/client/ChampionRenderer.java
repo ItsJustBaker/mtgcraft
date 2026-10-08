@@ -65,7 +65,27 @@ public final class ChampionRenderer {
         float headYaw = Mth.rotLerp(pt, v.yHeadRotO, v.yHeadRot) - bodyYaw;
         float pitch = Mth.lerp(pt, v.xRotO, v.getXRot());
         float limb = v.walkAnimation.position(pt), limbAmount = Math.min(1, v.walkAnimation.speed(pt));
-        ps.mulPose(Axis.YP.rotationDegrees(180 - bodyYaw));
+        if (v.isSleeping()) {
+            // Lying in bed, as players are drawn asleep.
+            net.minecraft.core.Direction bed = v.getBedOrientation();
+            if (bed != null) {
+                float eye = v.getEyeHeight(net.minecraft.world.entity.Pose.STANDING) - 0.1f;
+                ps.translate(-bed.getStepX() * eye, 0, -bed.getStepZ() * eye);
+            }
+            float yaw = bed == null ? 180 - bodyYaw : switch (bed) {
+                case SOUTH -> 90f;
+                case NORTH -> 270f;
+                case EAST -> 180f;
+                default -> 0f;
+            };
+            ps.mulPose(Axis.YP.rotationDegrees(yaw));
+            ps.mulPose(Axis.ZP.rotationDegrees(90));
+            ps.mulPose(Axis.YP.rotationDegrees(270));
+            headYaw = 0;
+            pitch = 0;
+        } else {
+            ps.mulPose(Axis.YP.rotationDegrees(180 - bodyYaw));
+        }
         ps.scale(-0.9375f, -0.9375f, 0.9375f);
         ps.translate(0, -1.501f, 0);
         model.attackTime = 0;

@@ -340,3 +340,9 @@ for the new themes, teleport-mid-duel bug, bugs 46/48 (card names).
 - Engine audit: every IGuiGame prompt is handled (one/many/insertInList fall back to getChoices). Blocking flow is
   correct (attacker then blocker); evasion (flying, menace...) is the engine's rules. Still need card names for 46/48.
 - Real rules bug: blocked attackers could assign damage to the player without trample (Card-Forge always passes the defender; its desktop dialog checks trample). `DuelGui.assignCombatDamage` now drops the defender unless `hasTrample()`.
+- 0.3.2: Champions/Duelists get card trades on first right-click (any profession; tag mtgcraft_card_trades); they lie
+  down when sleeping (player sleep rotations in ChampionRenderer); duel tool buttons in one row with labels scaled to
+  fit (instructions keep their space); Stats sheet shows untapped mana by colour (C = colourless only, Any);
+  card images from foreign-only sets (CardEdition.getCardsLangCode() != en) use the card's default English printing.
+- User reports colourless mana paying coloured costs: the mod has no payment code beyond pool clicks
+  (useMana with the right colour) — need a repro (card + lands). Playing the Familiar yourself: still not built.

@@ -1500,7 +1500,7 @@ public class DuelScreen extends Screen {
             ty += 11;
         }
         List<FormattedCharSequence> lines = font.split(Component.literal(guide[1]), w);
-        int maxLines = Math.max(1, (toolsY - ty - 2) / 9);
+        int maxLines = Math.max(1, (toolsTop() - ty - 2) / 9);
         g.pose().pushPose();
         for (int i = 0; i < Math.min(maxLines, lines.size()); i++) {
             g.drawString(font, lines.get(i), x + sx, ty + i * 9, i == maxLines - 1 && lines.size() > maxLines ? Theme.MUTED : 0xFFD8DDD2);
@@ -1527,6 +1527,12 @@ public class DuelScreen extends Screen {
         // Creative mode gets a cheat button that wins the duel on the spot.
         boolean creative = minecraft.player != null && minecraft.player.isCreative() && !duel.isOver();
         int n = 5 + (arenaToggle ? 1 : 0) + (creative ? 1 : 0);
+        // One row (the instructions above keep their space); labels shrink to fit instead of being cut.
+        toolCols = n;
+        toolRows = (n + toolCols - 1) / toolCols;
+        toolBW = (w - (toolCols - 1) * 3) / toolCols;
+        toolX0 = x;
+        toolIdx = 0;
         int bw = (w - (n - 1) * 3) / n;
         int bx = x;
         toolButton(g, "Log", bx, bw, mx, my, showLog, () -> showLog = !showLog);
@@ -1573,15 +1579,26 @@ public class DuelScreen extends Screen {
         }
     }
 
-    private void toolButton(GuiGraphics g, String label, int x, int w, int mx, int my, boolean on, Runnable action) {
-        boolean hover = in(mx, my, x, toolsY, w, 12);
-        Theme.rounded(g, x, toolsY, w, 12, on ? 0xE0503F1C : hover ? 0xE04A4F49 : 0xC0262B27);
+    private int toolCols = 1, toolRows = 1, toolBW, toolX0, toolIdx;
+
+    /** The top of the tool buttons (one or two rows). */
+    private int toolsTop() {
+        return toolsY - (toolRows - 1) * 14;
+    }
+
+    private void toolButton(GuiGraphics g, String label, int ignoredX, int ignoredW, int mx, int my, boolean on, Runnable action) {
+        int col = toolIdx % toolCols, row = toolIdx / toolCols;
+        toolIdx++;
+        int x = toolX0 + col * (toolBW + 3), w = toolBW, by = toolsY - (toolRows - 1 - row) * 14;
+        boolean hover = in(mx, my, x, by, w, 12);
+        Theme.rounded(g, x, by, w, 12, on ? 0xE0503F1C : hover ? 0xE04A4F49 : 0xC0262B27);
         g.pose().pushPose();
-        g.pose().translate(x + w / 2f, toolsY + 3, 0);
-        g.pose().scale(0.75f, 0.75f, 1);
-        g.drawCenteredString(font, Theme.ellipsize(font, label, (int) ((w - 2) / 0.75f)), 0, 0, on ? Theme.GOLD : Theme.TEXT);
+        float ls = Math.min(0.75f, (w - 3) / (float) Math.max(1, font.width(label)));
+        g.pose().translate(x + w / 2f, by + 6 - 4 * ls, 0);
+        g.pose().scale(ls, ls, 1);
+        g.drawCenteredString(font, label, 0, 0, on ? Theme.GOLD : Theme.TEXT);
         g.pose().popPose();
-        hits.add(new Hit(x, toolsY, w, 12, () -> {
+        hits.add(new Hit(x, by, w, 12, () -> {
             action.run();
             Theme.click();
         }));
@@ -1805,6 +1822,40 @@ public class DuelScreen extends Screen {
         }
     }
 
+    /**
+     * What the player's untapped mana sources can make, by colour: W U B R G, C for colourless only (it can't pay
+     * coloured costs) and Any for sources of any colour.
+     */
+    private static String manaByColor(PlayerView p) {
+        int[] n = new int[7];
+        String[] sym = {"W", "U", "B", "R", "G", "C", "Any"};
+        try {
+            for (CardView c : cards(p.getCards(ZoneType.Battlefield))) {
+                if (c.isTapped()) continue;
+                CardStateView st = c.getCurrentState();
+                if (st == null) continue;
+                forge.card.ColorSet makes = st.origProduceMana();
+                String text = st.getAbilityText();
+                if (st.origProduceAnyMana()) {
+                    n[6]++;
+                } else if (makes != null && !makes.isColorless()) {
+                    if (makes.hasWhite()) n[0]++;
+                    if (makes.hasBlue()) n[1]++;
+                    if (makes.hasBlack()) n[2]++;
+                    if (makes.hasRed()) n[3]++;
+                    if (makes.hasGreen()) n[4]++;
+                } else if (st.isLand() || (text != null && text.contains("Add {"))) {
+                    n[5]++;
+                }
+            }
+        } catch (RuntimeException concurrentEdit) {
+            return "-";
+        }
+        StringBuilder out = new StringBuilder();
+        for (int i = 0; i < n.length; i++) if (n[i] > 0) out.append(sym[i]).append(n[i]).append("  ");
+        return out.length() == 0 ? "nothing" : out.toString().trim();
+    }
+
     /** The stat sheet panel (top left): one block per player. */
     private void drawStats(GuiGraphics g, GameView view) {
         List<PlayerView> players = new ArrayList<>();
@@ -1832,6 +1883,7 @@ public class DuelScreen extends Screen {
                 if (n > 0) pool.append(sym[i]).append(n).append(" ");
             }
             lines.add("Mana sources " + ms[0] + "/" + ms[1] + " untapped" + (pool.length() > 0 ? "  Pool: " + pool.toString().trim() : ""));
+            lines.add("Untapped makes: " + manaByColor(p));
             lines.add("Hand " + cards(p.getCards(ZoneType.Hand)).size() + "  Library " + cards(p.getCards(ZoneType.Library)).size()
                     + "  Graveyard " + cards(p.getCards(ZoneType.Graveyard)).size() + "  Exile " + cards(p.getCards(ZoneType.Exile)).size());
             int cmd = commanderDamageTaken(view, p);

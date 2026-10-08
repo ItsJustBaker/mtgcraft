@@ -45,7 +45,7 @@ public final class BoosterTrades {
      * The villager wants one particular card (plus a few emeralds) for one of theirs: a common or uncommon for an
      * uncommon, or (at higher levels) an uncommon for a rare or mythic. Both come from the same themed pack.
      */
-    private static VillagerTrades.ItemListing cardForCard(boolean rare) {
+    static VillagerTrades.ItemListing cardForCard(boolean rare) {
         return (trader, random) -> {
             if (ForgeEngine.state() != ForgeEngine.State.READY) return null;
             Packs.Theme[] themes = Packs.Theme.values();
@@ -76,7 +76,7 @@ public final class BoosterTrades {
         });
     }
 
-    private static VillagerTrades.ItemListing booster(int emeralds, int uses) {
+    static VillagerTrades.ItemListing booster(int emeralds, int uses) {
         return (trader, random) -> {
             String set = set();
             if (set == null) return null;

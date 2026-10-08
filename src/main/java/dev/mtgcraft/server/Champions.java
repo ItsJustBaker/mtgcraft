@@ -38,6 +38,7 @@ public final class Champions {
     private static final String TAG = "mtgcraft_champion";
     private static final String TAG_DUELIST = "mtgcraft_duelist";
     private static final String TAG_CHECKED = "mtgcraft_champion_checked";
+    private static final String TAG_TRADES = "mtgcraft_card_trades";
     private static final String TAG_DAY = "mtgcraft_champion_day";
     private static final String TAG_CUP = "mtgcraft_world_cup";
     private static final double VILLAGE = 96;
@@ -140,6 +141,26 @@ public final class Champions {
         } else if (v.getRandom().nextInt(6) == 0) {
             makeDuelist(v);
         }
+    }
+
+    /**
+     * Champions and Duelists always trade cards, whatever their job (or none): the first right-click (without dueling
+     * gear) gives them card-for-card trades and a booster, added to whatever they already sell.
+     */
+    @SubscribeEvent(priority = net.minecraftforge.eventbus.api.EventPriority.HIGH)
+    public static void talkedTo(net.minecraftforge.event.entity.player.PlayerInteractEvent.EntityInteract event) {
+        if (event.getLevel().isClientSide() || !(event.getTarget() instanceof Villager v) || !spared(v)) return;
+        if (event.getItemStack().getItem() instanceof dev.mtgcraft.item.GauntletItem) return;
+        if (v.getTags().contains(TAG_TRADES) || ForgeEngine.state() != ForgeEngine.State.READY) return;
+        var offers = v.getOffers();
+        var rng = v.getRandom();
+        for (var listing : new net.minecraft.world.entity.npc.VillagerTrades.ItemListing[]{
+                BoosterTrades.cardForCard(false), BoosterTrades.cardForCard(false), BoosterTrades.cardForCard(true),
+                BoosterTrades.booster(is(v) ? 6 : 8, 8)}) {
+            var offer = listing.getOffer(v, rng);
+            if (offer != null) offers.add(offer);
+        }
+        v.addTag(TAG_TRADES);
     }
 
     @SubscribeEvent

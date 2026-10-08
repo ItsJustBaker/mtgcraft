@@ -51,6 +51,7 @@ public final class CardTextures {
     /** The texture for an image key, or null while it's still loading (or has no image). Render thread only. */
     public static ResourceLocation get(String key, boolean large) {
         if (key == null || key.length() < 3) return null;
+        key = english(key);
         Entry e = CACHE.get(key);
         if (e == null) {
             e = new Entry();
@@ -59,6 +60,33 @@ public final class CardTextures {
         }
         if (e.status != Status.READY) return null;
         return large ? e.large : e.small;
+    }
+
+    private static final java.util.Map<String, String> ENGLISH = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /**
+     * Cards from sets printed only in another language (some German, Japanese... sets) would download in that language:
+     * show the card's usual English printing instead. Keys that are fine map to themselves.
+     */
+    private static String english(String key) {
+        String cached = ENGLISH.get(key);
+        if (cached != null) return cached;
+        String out = key;
+        try {
+            forge.item.PaperCard pc = forge.util.ImageUtil.getPaperCardFromImageKey(key);
+            if (pc != null) {
+                forge.card.CardEdition ed = forge.StaticData.instance().getEditions().get(pc.getEdition());
+                String lang = ed == null ? null : ed.getCardsLangCode();
+                if (lang != null && !lang.isBlank() && !lang.equalsIgnoreCase("en")) {
+                    forge.item.PaperCard en = forge.model.FModel.getMagicDb().getCommonCards().getCard(pc.getName());
+                    if (en != null && en != pc) out = en.getImageKey(false);
+                }
+            }
+        } catch (RuntimeException notReady) {
+            return key;
+        }
+        ENGLISH.put(key, out);
+        return out;
     }
 
     private static void request(String key, Entry e) {
