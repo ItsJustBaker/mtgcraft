@@ -266,3 +266,29 @@ Next (user's order): card names needed for bugs 46 (land not entering tapped) an
 decks; player duel modes/stakes; difficulty; hand-card zoom; deck UI revamp; packs/loot; Champion villager + World Cup
 boss; quests; runtime booster art; arena v2 (floor/visuals, shaders); AI orb teammate; holo parties; Duel Disk glove;
 join "Index 0 out of bounds" still unexplained (ask for the error with -Dforge.logging.console.level=debug).
+
+### Session 9, part 2 (same day): more of 0.3.0
+All compile; none tried in game yet. Pushed with a 0.3.0 jar on the `downloads` branch.
+- Difficulty (`difficulty` -2..2, Settings menu): mob AI life x(1+0.25d), mob deck packs +d. `chestPackChance`:
+  `server/ChestLoot` adds a themed-pack pool to every `chests/*` loot table.
+- Hand cards: hovered hand card scales 1.9x (sharp texture).
+- Player duels: right-click a player → menu (Friendly Commander/Classic, To the death, Ante 3 cards, Reward packs
+  (needs World Cup, once per MC day per pair), Invite/Leave party). Stakes paid in `GauntletDuels.applyStakes`.
+- `server/Champions`: one Village Champion per 64 blocks (tag `mtgcraft_champion`, name "Village Champion"); losing to
+  it is safe, beating it gives a pack + best card of a themed pack (daily) and the World Cup once. Rendered as a player
+  with `textures/entity/champion.png` (the user's skin) by `client/ChampionRenderer`. `champion_spawn_egg` item.
+- Villager card-for-card trades (`BoosterTrades.cardTrades`: librarian, cleric, cartographer).
+- 10 new pack themes appended to `Packs.Theme` (RODENT SPIDER PHANTOM LUSH TRAIL ENDERMEN NECRO SAFARI QUARK FORBIDDEN);
+  they use the default pack model (no per-theme art yet).
+- Starters: colour choice prefers a real Commander precon of exactly those colours; "Surprise me" = random precon.
+- Duel Familiar (`familiar_orb`, craftable): learns a deck box's deck; joins mob duels as an AI teammate (team 1).
+  The user also wants to be able to *play* the familiar themselves (needs one client driving two seats): not done.
+- Parties + holo battles (`server/Parties`, menus only): party members anywhere get a "Holo battle!" prompt when a
+  member's lobby opens; home saved in persisted NBT, sent home in `end()` before penalties.
+- Duel Disk (`duel_disk`, crafted from the gauntlet): alternative look, forearm-mounted (`GloveRenderer`).
+- Quests = advancement tab `mtgcraft:quests/*` with pack/XP rewards; duel quests granted by `server/Quests`.
+
+Still not done: group PvP (pull nearby players into one free-for-all), deck screen revamp (ask user what bugs them),
+real booster art at runtime (no public pack-image source; plan: Scryfall card art on set packs via a BEWLR), arena v2
+(floor, shader check), teleport-mid-duel bug (10; Fix button is the workaround), card names for bugs 46/48, more ATM9
+themes (5 of 20), playing your familiar yourself, per-theme art for the 10 new themes.

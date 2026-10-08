@@ -337,7 +337,8 @@ public final class GauntletDuels {
             if (other == player || inDuel(other.getUUID()) || waiting(other.getUUID()) || !holdsGauntlet(other)) continue;
             if (deckOf(other, true) != null) nearby.add(other);
         }
-        if (nearby.isEmpty()) {
+        List<ServerPlayer> holo = Parties.holoCandidates(player, nearby);
+        if (nearby.isEmpty() && holo.isEmpty()) {
             startMobDuel(player, target, List.of());
             return;
         }
@@ -350,6 +351,10 @@ public final class GauntletDuels {
         l.target.setTarget(null);
         l.deadline = tick + JOIN_TICKS;
         for (ServerPlayer o : nearby) l.invited.add(o.getUUID());
+        for (ServerPlayer o : holo) {
+            l.invited.add(o.getUUID());
+            Parties.offerHolo(o, player, target);
+        }
         LOBBIES.put(l.host, l);
         String host = player.getGameProfile().getName();
         for (ServerPlayer o : nearby) {
@@ -524,20 +529,29 @@ public final class GauntletDuels {
             setup.seats.add(new MatchSetup.Seat(false, p.getGameProfile().getName(), p.getUUID(), h.getValue(), 1));
             seatEntities.add(p);
         }
+        // A Duel Familiar (one per duel) joins the players' side with the deck it learned.
+        for (ServerPlayer p : humans.keySet()) {
+            ItemStack orb = dev.mtgcraft.item.FamiliarOrbItem.find(p);
+            DeckChoice fd = orb.isEmpty() ? null : dev.mtgcraft.item.FamiliarOrbItem.deck(orb);
+            if (fd == null || (commander && fd.kind() != DeckChoice.Kind.CMD_PRECON && !commanderReady(fd))) continue;
+            setup.seats.add(new MatchSetup.Seat(true, p.getGameProfile().getName() + "'s Familiar", null, fd, 1));
+            seatEntities.add(p);
+            break;
+        }
         if (!d.boss) addMobSeats(d, setup, seatEntities, commander, library, 0);
         if (d.boss) {
             int life = MtgConfig.BOSS_LIFE.get() + MtgConfig.BOSS_LIFE_PER_EXTRA_PLAYER.get() * (humans.size() - 1);
-            for (MatchSetup.Seat st : setup.seats) if (st.ai) st.startingLife = life;
+            for (MatchSetup.Seat st : setup.seats) if (st.ai && !st.name.endsWith("'s Familiar")) st.startingLife = life;
         }
         if (quick) {
             int life = MobThemes.quickLife(tier);
-            for (MatchSetup.Seat st : setup.seats) if (st.ai) st.startingLife = life;
+            for (MatchSetup.Seat st : setup.seats) if (st.ai && !st.name.endsWith("'s Familiar")) st.startingLife = life;
         }
         // Difficulty: -2 halves the mobs' life, +2 gives them half again as much (their decks change in addMobSeats).
         int diff = MtgConfig.DIFFICULTY.get();
         if (diff != 0) {
             for (MatchSetup.Seat st : setup.seats) {
-                if (!st.ai) continue;
+                if (!st.ai || st.name.endsWith("'s Familiar")) continue;
                 int base = st.startingLife > 0 ? st.startingLife : commander ? 40 : 20;
                 st.startingLife = Math.max(1, Math.round(base * (1 + 0.25f * diff)));
             }
@@ -823,6 +837,11 @@ public final class GauntletDuels {
         if (d.over) return;
         d.over = true;
         for (UUID id : d.players.keySet()) BY_PLAYER.remove(id);
+        // Holograms go home first, so loot, penalties and graves all happen where they really are.
+        for (UUID id : d.players.keySet()) {
+            ServerPlayer hp = DuelHosting.online(d.level.getServer(), id);
+            if (hp != null) Parties.sendHome(hp);
+        }
         for (Mob m : d.everyone) {
             Boolean grav = d.hadNoGravity.get(m.getUUID());
             if (grav != null && m.isAlive()) {
@@ -938,6 +957,7 @@ public final class GauntletDuels {
                         + (myXp > 0 ? "  +" + myXp + " XP" : "");
                 Net.toPlayer(p, new Packets.Rewards("Victory!", sub, loot));
                 if (d.mobs.stream().anyMatch(Champions::is)) Champions.reward(p);
+                Quests.won(p, d.boss);
             }
             return;
         }
@@ -995,9 +1015,11 @@ public final class GauntletDuels {
         // First: what kind of duel? (format and stakes)
         String n = to.getGameProfile().getName();
         Net.toPlayer(from, new Packets.Prompt("Duel " + n, "Pick the format and what you play for. " + n + " sees it before accepting.",
-                List.of("Friendly (Commander)", "Friendly (Classic)", "To the death", "Ante: 3 cards each", "Reward duel (packs)", "Cancel"),
+                List.of("Friendly (Commander)", "Friendly (Classic)", "To the death", "Ante: 3 cards each", "Reward duel (packs)",
+                        Parties.together(from, to) ? "Leave party" : "Invite to party", "Cancel"),
                 List.of("/mtgduel challenge " + n + " FRIENDLY C", "/mtgduel challenge " + n + " FRIENDLY K", "/mtgduel challenge " + n + " DEATH C",
-                        "/mtgduel challenge " + n + " ANTE C", "/mtgduel challenge " + n + " REWARD C", ""), 30));
+                        "/mtgduel challenge " + n + " ANTE C", "/mtgduel challenge " + n + " REWARD C",
+                        Parties.together(from, to) ? "/mtgparty leave" : "/mtgparty invite " + n, ""), 30));
     }
 
     /** Pays out a player duel's stakes once the game has a winner. */
@@ -1055,6 +1077,17 @@ public final class GauntletDuels {
                 default -> { }
             }
         }
+    }
+
+    /** Whether {@code host} has a duel lobby open that {@code p} was invited to. */
+    static boolean lobbyOpenFor(ServerPlayer host, ServerPlayer p) {
+        Lobby l = LOBBIES.get(host.getUUID());
+        return l != null && l.invited.contains(p.getUUID()) && tick < l.deadline;
+    }
+
+    static boolean joinedLobby(ServerPlayer host, ServerPlayer p) {
+        Lobby l = LOBBIES.get(host.getUUID());
+        return l != null && l.joined.contains(p.getUUID());
     }
 
     /** What each pending invite plays for: invitee -> inviter -> "STAKE FORMAT". */

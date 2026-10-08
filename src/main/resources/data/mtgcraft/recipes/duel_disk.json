@@ -1,0 +1,7 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "equipment",
+  "pattern": ["GAG", "IXI"],
+  "key": { "G": { "item": "minecraft:gold_ingot" }, "A": { "item": "minecraft:amethyst_shard" }, "I": { "item": "minecraft:iron_ingot" }, "X": { "item": "mtgcraft:duel_gauntlet" } },
+  "result": { "item": "mtgcraft:duel_disk" }
+}

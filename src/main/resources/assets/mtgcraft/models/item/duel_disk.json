@@ -1,0 +1,35 @@
+{
+  "textures": {
+    "trim": "minecraft:block/gold_block",
+    "body": "minecraft:block/purple_concrete",
+    "plate": "minecraft:block/polished_blackstone",
+    "gem": "minecraft:block/amethyst_block",
+    "particle": "minecraft:block/gold_block"
+  },
+  "gui_light": "side",
+  "elements": [
+    {"from": [5.7, 3, 5.7], "to": [10.3, 13, 10.3],
+     "faces": {"north": {"texture": "#body"}, "south": {"texture": "#body"}, "east": {"texture": "#body"}, "west": {"texture": "#body"}, "up": {"texture": "#trim"}, "down": {"texture": "#trim"}}},
+    {"from": [5.5, 3, 5.5], "to": [10.5, 4, 10.5],
+     "faces": {"north": {"texture": "#trim"}, "south": {"texture": "#trim"}, "east": {"texture": "#trim"}, "west": {"texture": "#trim"}, "up": {"texture": "#trim"}, "down": {"texture": "#trim"}}},
+    {"from": [5.5, 12, 5.5], "to": [10.5, 13, 10.5],
+     "faces": {"north": {"texture": "#trim"}, "south": {"texture": "#trim"}, "east": {"texture": "#trim"}, "west": {"texture": "#trim"}, "up": {"texture": "#trim"}, "down": {"texture": "#trim"}}},
+    {"from": [10.3, 2, -1], "to": [11.3, 14, 17],
+     "faces": {"north": {"texture": "#trim"}, "south": {"texture": "#trim"}, "east": {"texture": "#plate"}, "west": {"texture": "#plate"}, "up": {"texture": "#trim"}, "down": {"texture": "#trim"}}},
+    {"from": [11.3, 4, 1], "to": [11.6, 12, 6],
+     "faces": {"north": {"texture": "#trim"}, "south": {"texture": "#trim"}, "east": {"texture": "#gem"}, "west": {"texture": "#gem"}, "up": {"texture": "#trim"}, "down": {"texture": "#trim"}}},
+    {"from": [11.3, 4, 10], "to": [11.6, 12, 15],
+     "faces": {"north": {"texture": "#trim"}, "south": {"texture": "#trim"}, "east": {"texture": "#gem"}, "west": {"texture": "#gem"}, "up": {"texture": "#trim"}, "down": {"texture": "#trim"}}},
+    {"from": [6.5, 8, 10.3], "to": [9.5, 12, 12.3],
+     "faces": {"north": {"texture": "#trim"}, "south": {"texture": "#trim"}, "east": {"texture": "#trim"}, "west": {"texture": "#trim"}, "up": {"texture": "#body"}, "down": {"texture": "#trim"}}}
+  ],
+  "display": {
+    "gui": {"rotation": [20, 135, 0], "translation": [0, 0, 0], "scale": [0.7, 0.7, 0.7]},
+    "ground": {"rotation": [0, 0, 0], "translation": [0, 2, 0], "scale": [0.4, 0.4, 0.4]},
+    "fixed": {"rotation": [0, 90, 0], "translation": [0, 0, 0], "scale": [0.7, 0.7, 0.7]},
+    "thirdperson_righthand": {"scale": [0, 0, 0]},
+    "thirdperson_lefthand": {"scale": [0, 0, 0]},
+    "firstperson_righthand": {"rotation": [0, 90, 0], "translation": [1, 1, 0], "scale": [0.5, 0.5, 0.5]},
+    "firstperson_lefthand": {"rotation": [0, 90, 0], "translation": [1, 1, 0], "scale": [0.5, 0.5, 0.5]}
+  }
+}

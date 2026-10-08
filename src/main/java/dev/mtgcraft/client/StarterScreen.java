@@ -67,6 +67,8 @@ public class StarterScreen extends Screen {
                     Page p = to[i];
                     out.add(new Btn(ways[i][0], ways[i][1], px + 12, top + i * 34, pw - 24, 28, () -> go(p), 0, i == 0));
                 }
+                out.add(new Btn("Surprise me", "A random real Commander precon deck", px + 12, top + 3 * 34, pw - 24, 28,
+                        () -> choose(0, "*precon"), 0, false));
             }
             case COLORS -> {
                 int cw = (pw - 30) / 2;
@@ -110,7 +112,7 @@ public class StarterScreen extends Screen {
 
     private int panelH() {
         return switch (page) {
-            case START -> 148;
+            case START -> 182;
             case COLORS -> 34 + 5 * 26 + 30;
             case TYPES -> 34 + (Tribal.TRIBES.length + 4) / 5 * 18 + 30;
             case QUIZ -> 34 + 12 + 5 * 22 + 30;

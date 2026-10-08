@@ -1,0 +1,6 @@
+{
+  "parent": "mtgcraft:quests/first_win",
+  "display": { "icon": { "item": "minecraft:dragon_head" }, "title": "Giant Slayer", "description": "Beat a boss in a duel",  "frame": "challenge", "show_toast": true, "announce_to_chat": true },
+  "criteria": { "done": { "trigger": "minecraft:impossible" } },
+  "rewards": { "loot": ["mtgcraft:quests/packs"], "experience": 300 }
+}

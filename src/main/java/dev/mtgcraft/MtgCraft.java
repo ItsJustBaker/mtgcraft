@@ -55,6 +55,12 @@ public class MtgCraft {
             () -> new dev.mtgcraft.item.StarterKitItem(new Item.Properties().stacksTo(1)));
     public static final RegistryObject<Item> WORLD_CUP = ITEMS.register("world_cup",
             () -> new Item(new Item.Properties().stacksTo(1).rarity(net.minecraft.world.item.Rarity.EPIC).fireResistant()));
+    public static final RegistryObject<Item> FAMILIAR_ORB = ITEMS.register("familiar_orb",
+            () -> new dev.mtgcraft.item.FamiliarOrbItem(new Item.Properties().stacksTo(1)));
+    public static final RegistryObject<Item> DUEL_DISK = ITEMS.register("duel_disk",
+            () -> new dev.mtgcraft.item.DuelDiskItem(new Item.Properties().stacksTo(1)));
+    public static final RegistryObject<Item> CHAMPION_EGG = ITEMS.register("champion_spawn_egg",
+            () -> new dev.mtgcraft.item.ChampionEggItem(new Item.Properties()));
 
     /** The mod's own creative tab. */
     public static final RegistryObject<CreativeModeTab> TAB = TABS.register("mtgcraft", () -> CreativeModeTab.builder()
@@ -68,6 +74,9 @@ public class MtgCraft {
                 output.accept(DUEL_GAUNTLET.get());
                 output.accept(STARTER_KIT.get());
                 output.accept(WORLD_CUP.get());
+                output.accept(FAMILIAR_ORB.get());
+                output.accept(DUEL_DISK.get());
+                output.accept(CHAMPION_EGG.get());
                 output.accept(dev.mtgcraft.item.PackItem.ticket(false));
                 output.accept(dev.mtgcraft.item.PackItem.ticket(true));
                 for (dev.mtgcraft.engine.Packs.Theme t : dev.mtgcraft.engine.Packs.Theme.values()) {

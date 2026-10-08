@@ -1,0 +1,7 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [" A ", "AEA", " A "],
+  "key": { "A": { "item": "minecraft:amethyst_shard" }, "E": { "item": "minecraft:ender_eye" } },
+  "result": { "item": "mtgcraft:familiar_orb" }
+}

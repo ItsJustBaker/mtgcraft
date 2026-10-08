@@ -38,6 +38,15 @@ public final class GloveRenderer {
         (right ? model.rightArm : model.leftArm).translateAndRotate(pose);
         // Arm boxes are 4px wide (3px for slim skins), centred 1px (0.5px) out from the arm's pivot.
         float cx = ("slim".equals(player.getModelName()) ? 0.5f : 1f) * (right ? -1 : 1);
+        if (glove.getItem() instanceof dev.mtgcraft.item.DuelDiskItem) {
+            // The Duel Disk sits on the forearm (model centre at mid-forearm), its card plate on the outer side.
+            pose.translate(cx / 16f, 4f / 16f, 0);
+            if (right) pose.mulPose(Axis.YP.rotationDegrees(180));
+            Minecraft.getInstance().getItemRenderer().renderStatic(player, glove, ItemDisplayContext.NONE, !right,
+                    pose, buffers, player.level(), light, OverlayTexture.NO_OVERLAY, player.getId());
+            pose.popPose();
+            return;
+        }
         // Wrapped around the hand: a bit wider than the arm (and its sleeve) all round, cuff at the wrist, fingertips
         // level with the end of the arm; thumb forward. The model is 7px wide (x), 5px deep (z), 15px long (y).
         // Snug: just over the arm's 4px (the sleeve layer is 4.5px), running from the wrist (y 4) to past the hand (y 11.5).

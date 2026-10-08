@@ -86,8 +86,9 @@ public final class StarterKits {
      */
     public static void choose(ServerPlayer p, int colors, String tribe) {
         if (persisted(p).getBoolean(TAG)) return;
-        boolean byType = tribe != null && !tribe.isEmpty();
-        if (byType ? !Tribal.known(tribe) : Integer.bitCount(colors & 0x1F) == 0 || Integer.bitCount(colors & 0x1F) > 2) return;
+        boolean precon = "*precon".equals(tribe);
+        boolean byType = !precon && tribe != null && !tribe.isEmpty();
+        if (!precon && (byType ? !Tribal.known(tribe) : Integer.bitCount(colors & 0x1F) == 0 || Integer.bitCount(colors & 0x1F) > 2)) return;
         if (ForgeEngine.state() != ForgeEngine.State.READY) return;
         if (!useKit(p)) return;
         persisted(p).putBoolean(TAG, true);
@@ -95,7 +96,11 @@ public final class StarterKits {
         ForgeEngine.runOnUi(() -> {
             Deck deck;
             String name;
-            if (byType) {
+            Deck real = precon ? realPrecon(-1) : byType ? null : realPrecon(colors & 0x1F);
+            if (real != null) {
+                deck = real;
+                name = real.getName();
+            } else if (byType) {
                 deck = Tribal.commanderDeck(tribe, false);
                 name = deck.getName();
             } else {
@@ -109,6 +114,35 @@ public final class StarterKits {
             Deck built = deck;
             server.execute(() -> give(p, built, name));
         });
+    }
+
+    /** Colour identity of each real Commander precon (worked out once). */
+    private static java.util.Map<String, Integer> preconColors;
+
+    /**
+     * A real (Wizards-made) Commander precon: one whose colours are exactly {@code mask}, or any one for -1. These are
+     * solid, tested decks, which makes better starters than generated ones. Null when none fits.
+     */
+    private static Deck realPrecon(int mask) {
+        try {
+            if (preconColors == null) {
+                java.util.Map<String, Integer> m = new java.util.HashMap<>();
+                for (String n : dev.mtgcraft.engine.Decks.commanderPrecons()) {
+                    Deck d = dev.mtgcraft.engine.Decks.commanderPrecon(n);
+                    if (d == null || d.getCommanders().isEmpty()) continue;
+                    int c = 0;
+                    for (PaperCard cmd : d.getCommanders()) c |= cmd.getRules().getColorIdentity().getColor();
+                    m.put(n, c);
+                }
+                preconColors = m;
+            }
+            List<String> fits = new java.util.ArrayList<>();
+            for (var e : preconColors.entrySet()) if (mask < 0 || e.getValue() == mask) fits.add(e.getKey());
+            if (fits.isEmpty()) return null;
+            return dev.mtgcraft.engine.Decks.commanderPrecon(fits.get(new java.util.Random().nextInt(fits.size())));
+        } catch (RuntimeException e) {
+            return null;
+        }
     }
 
     private static List<String> colorNames(byte mask) {
