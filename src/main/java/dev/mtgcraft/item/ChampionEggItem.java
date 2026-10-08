@@ -22,6 +22,7 @@ public class ChampionEggItem extends ForgeSpawnEggItem {
         ListTag tags = new ListTag();
         tags.add(StringTag.valueOf("mtgcraft_champion"));
         tags.add(StringTag.valueOf("mtgcraft_champion_checked"));
+        tags.add(StringTag.valueOf("mtgcraft_champion_egg"));
         e.put("Tags", tags);
         e.putString("CustomName", Component.Serializer.toJson(Component.literal("Village Champion")
                 .withStyle(s -> s.withColor(net.minecraft.ChatFormatting.GOLD).withBold(true))));

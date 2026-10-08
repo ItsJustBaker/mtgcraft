@@ -909,7 +909,7 @@ public final class GauntletDuels {
             for (Mob m : d.everyone) {
                 if (!m.isAlive()) continue;
                 // A Champion is never killed: they hand over a prize instead (below).
-                if (Champions.is(m)) continue;
+                if (Champions.spared(m)) continue;
                 if (m instanceof net.minecraft.world.entity.boss.enderdragon.EnderDragon dragon) {
                     // The dragon pays out its XP during its death animation: work it out now and catch those orbs.
                     var fight = dragon.getDragonFight();
@@ -962,8 +962,8 @@ public final class GauntletDuels {
             return;
         }
         Mob victor = d.mobs.isEmpty() ? null : d.mobs.get(0);
-        if (d.mobs.stream().anyMatch(Champions::is)) {
-            for (ServerPlayer p : online) tell(p, "The Champion wins, and helps you back up. Try again any time!");
+        if (d.mobs.stream().anyMatch(Champions::spared)) {
+            for (ServerPlayer p : online) tell(p, "Your opponent wins, and helps you back up. Try again any time!");
             return;
         }
         for (ServerPlayer p : online) {
@@ -1180,8 +1180,8 @@ public final class GauntletDuels {
 
     private static void sendChallenge(ServerPlayer from, ServerPlayer to, String stake, boolean commander) {
         if (!List.of("FRIENDLY", "DEATH", "ANTE", "REWARD").contains(stake)) return;
-        if ("REWARD".equals(stake) && !Champions.hasCup(from)) {
-            tell(from, "Reward duels need the MTG World Cup: beat a Village Champion to win it.");
+        if ("REWARD".equals(stake) && !Champions.hasCup(from) && !Champions.trophyNear(from)) {
+            tell(from, "Reward duels need the MTG World Cup: carry it, or place it on a Magic Table nearby. Beat a Village Champion to win it.");
             return;
         }
         String toName = to.getGameProfile().getName(), fromName = from.getGameProfile().getName();

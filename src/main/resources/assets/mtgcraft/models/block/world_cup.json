@@ -1,0 +1,11 @@
+{
+  "textures": { "gold": "minecraft:block/gold_block", "base": "minecraft:block/polished_blackstone", "gem": "minecraft:block/amethyst_block", "particle": "minecraft:block/gold_block" },
+  "elements": [
+    {"from": [4, 0, 4], "to": [12, 2, 12], "faces": {"north": {"texture": "#base"}, "south": {"texture": "#base"}, "east": {"texture": "#base"}, "west": {"texture": "#base"}, "up": {"texture": "#base"}, "down": {"texture": "#base"}}},
+    {"from": [7, 2, 7], "to": [9, 7, 9], "faces": {"north": {"texture": "#gold"}, "south": {"texture": "#gold"}, "east": {"texture": "#gold"}, "west": {"texture": "#gold"}, "up": {"texture": "#gold"}, "down": {"texture": "#gold"}}},
+    {"from": [5, 7, 5], "to": [11, 14, 11], "faces": {"north": {"texture": "#gold"}, "south": {"texture": "#gold"}, "east": {"texture": "#gold"}, "west": {"texture": "#gold"}, "up": {"texture": "#base"}, "down": {"texture": "#gold"}}},
+    {"from": [3, 9, 7], "to": [5, 13, 9], "faces": {"north": {"texture": "#gold"}, "south": {"texture": "#gold"}, "east": {"texture": "#gold"}, "west": {"texture": "#gold"}, "up": {"texture": "#gold"}, "down": {"texture": "#gold"}}},
+    {"from": [11, 9, 7], "to": [13, 13, 9], "faces": {"north": {"texture": "#gold"}, "south": {"texture": "#gold"}, "east": {"texture": "#gold"}, "west": {"texture": "#gold"}, "up": {"texture": "#gold"}, "down": {"texture": "#gold"}}},
+    {"from": [7, 9, 4.8], "to": [9, 11, 5], "faces": {"north": {"texture": "#gem"}, "south": {"texture": "#gem"}, "east": {"texture": "#gem"}, "west": {"texture": "#gem"}, "up": {"texture": "#gem"}, "down": {"texture": "#gem"}}}
+  ]
+}

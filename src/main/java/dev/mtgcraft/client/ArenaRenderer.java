@@ -145,6 +145,48 @@ public final class ArenaRenderer {
      * upward in a sweeping wave with a bright violet edge, then twinkling stars. It is drawn as solid entity geometry
      * (full-bright), which shader packs render like any mob, and which hides clouds and terrain behind it.
      */
+    // ------------------------------------------------------------------ shader packs
+
+    private static boolean shaderCache;
+    private static long shaderCheckedAt;
+
+    /** Whether an Oculus/Iris shader pack is on (checked through Iris's public API, at most once a second). */
+    static boolean shaders() {
+        long now = System.currentTimeMillis();
+        if (now - shaderCheckedAt > 1000) {
+            shaderCheckedAt = now;
+            try {
+                Object api = Class.forName("net.irisshaders.iris.api.v0.IrisApi").getMethod("getInstance").invoke(null);
+                shaderCache = (Boolean) api.getClass().getMethod("isShaderPackInUse").invoke(api);
+            } catch (Throwable notInstalled) {
+                shaderCache = false;
+            }
+        }
+        return shaderCache;
+    }
+
+    /** Glow geometry (additive). Shader packs turn it into see-through holes, so with one on it isn't drawn. */
+    private static VertexConsumer glow(MultiBufferSource buffers) {
+        return shaders() ? NO_DRAW : buffers.getBuffer(RenderType.lightning());
+    }
+
+    /** Card faces: glowing normally; solid cutouts with a shader pack (which mangles the glowing kind). */
+    private static RenderType cardType(net.minecraft.resources.ResourceLocation tex) {
+        return shaders() ? RenderType.entityCutoutNoCull(tex) : RenderType.entityTranslucentEmissive(tex);
+    }
+
+    private static final VertexConsumer NO_DRAW = new VertexConsumer() {
+        @Override public VertexConsumer vertex(double x, double y, double z) { return this; }
+        @Override public VertexConsumer color(int r, int g, int b, int a) { return this; }
+        @Override public VertexConsumer uv(float u, float v) { return this; }
+        @Override public VertexConsumer overlayCoords(int u, int v) { return this; }
+        @Override public VertexConsumer uv2(int u, int v) { return this; }
+        @Override public VertexConsumer normal(float x, float y, float z) { return this; }
+        @Override public void endVertex() { }
+        @Override public void defaultColor(int r, int g, int b, int a) { }
+        @Override public void unsetDefaultColor() { }
+    };
+
     /** Called from {@link #render} before its single flush, exactly like the stage floor (shader packs place it right). */
     private static void drawVoid(RenderLevelStageEvent event, MultiBufferSource buffers) {
         Camera cam = event.getCamera();
@@ -442,7 +484,7 @@ public final class ArenaRenderer {
     /** A swirling purple-black vortex on the floor: the exile zone. */
     private static void voidPortal(PoseStack pose, Camera cam, MultiBufferSource buffers, Vec3 at, float radius, long now, boolean boss) {
         Vec3 o = at.subtract(cam.getPosition()).add(0, 0.008, 0);
-        VertexConsumer vc = buffers.getBuffer(RenderType.lightning());
+        VertexConsumer vc = glow(buffers);
         Matrix4f m = pose.last().pose();
         // dark core
         ring(vc, m, o, radius * 0.55, radius * 0.55, 0xC0100018, 24, 0);
@@ -482,7 +524,7 @@ public final class ArenaRenderer {
         Vec3 bl = o.subtract(ax.scale(cw / 2)).subtract(ay.scale(ch / 2));
         ResourceLocation tex = art(c);
         Matrix4f m = pose.last().pose();
-        VertexConsumer vc = buffers.getBuffer(RenderType.entityTranslucentEmissive(tex));
+        VertexConsumer vc = buffers.getBuffer(cardType(tex));
         v(vc, m, tl, 0, 0, alpha);
         v(vc, m, bl, 0, 1, alpha);
         v(vc, m, br, 1, 1, alpha);
@@ -504,16 +546,16 @@ public final class ArenaRenderer {
         pose.mulPose(Axis.ZP.rotationDegrees(roll));
         Matrix4f m = pose.last().pose();
         float hw = (float) w / 2, hh = (float) (w * 88 / 63) / 2;
-        VertexConsumer glow = buffers.getBuffer(RenderType.lightning());
+        VertexConsumer glow = glow(buffers);
         quad(glow, m, -hw - 0.03f, -hh - 0.03f, hw + 0.03f, hh + 0.03f, -0.003f, 0x3050E0FF);
-        VertexConsumer vc = buffers.getBuffer(RenderType.entityTranslucentEmissive(art(c)));
+        VertexConsumer vc = buffers.getBuffer(cardType(art(c)));
         float x0 = -hw, x1 = hw, y0 = -hh, y1 = hh;
         int l = LightTexture.FULL_BRIGHT, ov = OverlayTexture.NO_OVERLAY;
         vc.vertex(m, x0, y0, 0).color(255, 255, 255, alpha).uv(0, 1).overlayCoords(ov).uv2(l).normal(0, 0, 1).endVertex();
         vc.vertex(m, x1, y0, 0).color(255, 255, 255, alpha).uv(1, 1).overlayCoords(ov).uv2(l).normal(0, 0, 1).endVertex();
         vc.vertex(m, x1, y1, 0).color(255, 255, 255, alpha).uv(1, 0).overlayCoords(ov).uv2(l).normal(0, 0, 1).endVertex();
         vc.vertex(m, x0, y1, 0).color(255, 255, 255, alpha).uv(0, 0).overlayCoords(ov).uv2(l).normal(0, 0, 1).endVertex();
-        VertexConsumer back = buffers.getBuffer(RenderType.entityTranslucentEmissive(Theme.CARD_BACK));
+        VertexConsumer back = buffers.getBuffer(cardType(Theme.CARD_BACK));
         back.vertex(m, x1, y0, -0.001f).color(255, 255, 255, alpha).uv(0, 1).overlayCoords(ov).uv2(l).normal(0, 0, -1).endVertex();
         back.vertex(m, x0, y0, -0.001f).color(255, 255, 255, alpha).uv(1, 1).overlayCoords(ov).uv2(l).normal(0, 0, -1).endVertex();
         back.vertex(m, x0, y1, -0.001f).color(255, 255, 255, alpha).uv(1, 0).overlayCoords(ov).uv2(l).normal(0, 0, -1).endVertex();
@@ -538,7 +580,7 @@ public final class ArenaRenderer {
                               double cw, double ch, int color) {
         Vec3 o = at.subtract(cam.getPosition()).add(0, 0.006, 0);
         double t = 0.04;
-        VertexConsumer vc = buffers.getBuffer(RenderType.lightning());
+        VertexConsumer vc = glow(buffers);
         Matrix4f m = pose.last().pose();
         Vec3 hx = r.scale(cw / 2), hy = f.scale(ch / 2);
         strip(vc, m, o.subtract(hx).add(hy), o.add(hx).add(hy), f, t, color);
@@ -554,7 +596,7 @@ public final class ArenaRenderer {
         double w = slots * (cw + 0.12) + 0.4, step = cw + 0.12;
         Vec3 mid = back.add(front).scale(0.5).subtract(cp).add(0, -0.004, 0);
         double depth = front.distanceTo(back) + ch + 0.4;
-        VertexConsumer vc = buffers.getBuffer(RenderType.lightning());
+        VertexConsumer vc = glow(buffers);
         Matrix4f m = pose.last().pose();
         int plate = (glow & 0x00FFFFFF) | 0x18000000;
         Vec3 hx = r.scale(w / 2), hy = f.scale(depth / 2);
@@ -570,7 +612,7 @@ public final class ArenaRenderer {
     private static void podium(PoseStack pose, Camera cam, MultiBufferSource buffers, Vec3 feet, float s, int glow,
                                boolean danger, long now) {
         Vec3 o = feet.subtract(cam.getPosition());
-        VertexConsumer vc = buffers.getBuffer(RenderType.lightning());
+        VertexConsumer vc = glow(buffers);
         Matrix4f m = pose.last().pose();
         double rad = 0.95 * Math.max(1, s), h = 0.3;
         int col = danger ? 0x70FF4040 : (glow & 0x00FFFFFF) | 0x70000000;
@@ -600,7 +642,7 @@ public final class ArenaRenderer {
         Vec3 a = from.subtract(cp), b = to.subtract(cp);
         Vec3 view = new Vec3(cam.getLookVector());
         Vec3 side = view.cross(new Vec3(0, 1, 0)).normalize().scale(0.06);
-        VertexConsumer vc = buffers.getBuffer(RenderType.lightning());
+        VertexConsumer vc = glow(buffers);
         quadW(vc, pose.last().pose(), a.subtract(side), a.add(side), b.add(side.scale(2)), b.subtract(side.scale(2)), color);
     }
 
@@ -625,7 +667,7 @@ public final class ArenaRenderer {
                         .overlayCoords(ov).uv2(l).normal(0, side == 0 ? 1 : -1, 0).endVertex();
             }
         }
-        VertexConsumer vc = buffers.getBuffer(RenderType.lightning());
+        VertexConsumer vc = glow(buffers);
         int line = (glow & 0x00FFFFFF) | 0x60000000;
         int faint = (glow & 0x00FFFFFF) | 0x20000000;
         double spin = now / 9000.0;
@@ -654,7 +696,7 @@ public final class ArenaRenderer {
     private static void barrier(PoseStack pose, Camera cam, MultiBufferSource buffers, Vec3 center, float radius,
                                 float height, int glow, long now) {
         Vec3 o = center.subtract(cam.getPosition());
-        VertexConsumer vc = buffers.getBuffer(RenderType.lightning());
+        VertexConsumer vc = glow(buffers);
         Matrix4f m = pose.last().pose();
         int segs = 64;
         int rgb = glow & 0x00FFFFFF;

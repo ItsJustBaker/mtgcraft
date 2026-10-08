@@ -52,7 +52,8 @@ public final class CardItemRenderer extends BlockEntityWithoutLevelRenderer {
 
     @Override
     public void renderByItem(ItemStack stack, ItemDisplayContext ctx, PoseStack pose, MultiBufferSource buffers, int light, int overlay) {
-        ResourceLocation front = art(CardItem.key(stack), ctx == ItemDisplayContext.FIXED);
+        ResourceLocation front = art(CardItem.key(stack), ctx == ItemDisplayContext.FIXED || ctx.firstPerson()
+                || ctx == ItemDisplayContext.THIRD_PERSON_RIGHT_HAND || ctx == ItemDisplayContext.THIRD_PERSON_LEFT_HAND);
         if (front == null) front = Theme.CARD_BACK;
         // Card proportions 63x88 inside the 1x1 item space.
         float h = 0.94f, w = h * 63f / 88f;

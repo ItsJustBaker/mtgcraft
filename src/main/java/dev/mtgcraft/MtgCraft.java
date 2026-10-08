@@ -53,8 +53,10 @@ public class MtgCraft {
             () -> new dev.mtgcraft.item.GauntletItem(new Item.Properties().stacksTo(1)));
     public static final RegistryObject<Item> STARTER_KIT = ITEMS.register("starter_kit",
             () -> new dev.mtgcraft.item.StarterKitItem(new Item.Properties().stacksTo(1)));
+    public static final RegistryObject<Block> WORLD_CUP_BLOCK = BLOCKS.register("world_cup",
+            () -> new dev.mtgcraft.WorldCupBlock(BlockBehaviour.Properties.copy(Blocks.GOLD_BLOCK).strength(1f).noOcclusion()));
     public static final RegistryObject<Item> WORLD_CUP = ITEMS.register("world_cup",
-            () -> new Item(new Item.Properties().stacksTo(1).rarity(net.minecraft.world.item.Rarity.EPIC).fireResistant()));
+            () -> new BlockItem(WORLD_CUP_BLOCK.get(), new Item.Properties().stacksTo(1).rarity(net.minecraft.world.item.Rarity.EPIC).fireResistant()));
     public static final RegistryObject<Item> FAMILIAR_ORB = ITEMS.register("familiar_orb",
             () -> new dev.mtgcraft.item.FamiliarOrbItem(new Item.Properties().stacksTo(1)));
     public static final RegistryObject<Item> DUEL_DISK = ITEMS.register("duel_disk",

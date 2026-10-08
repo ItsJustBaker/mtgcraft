@@ -323,3 +323,19 @@ for the new themes, teleport-mid-duel bug, bugs 46/48 (card names).
   shortened to 11px / 3 zones ("too long"); glove overlay now covers only the hand (last 4px).
 - Shaders placed the solid dome wrong (a small ball elsewhere): its own endBatch(type) flush ran outside Iris's entity context. Now drawn from render() before the single buffers.endBatch(), as entityTranslucent like the floor, normal (0,1,0). Void-arena fog eased to 2.6R..4.2R (it hid the enemy).
 - Join error still unexplained; added `NetDebugLog` (common setup): Minecraft's Connection + Forge network loggers at DEBUG to logs/mtgcraft-network.log, so the full 'Internal Exception' stack trace gets written (ATM9 has no debug.log). Next step: read that file from the player who got kicked.
+
+### Session 10 (2026-10-08): 0.3.1 list (Downloads\0.3.1.txt + screenshots)
+- Hover stutter (my 1.9x lift moved hand cards out from under the mouse → flicker, mis-clicks like casting Manhole
+  Cover): hand/command cards hit-test at rest (`Placed.containsAtRest`), lift 1.5x.
+- Mana counter counted every permanent (`origProduceMana()` is a ColorSet, never null): now lands, coloured makers,
+  or ability text containing "Add {". Player counters shown in words ("Poison 3/10"); **Stats** button = stat sheet
+  (life, counters, mana sources + pool, zones, commander damage) per player.
+- Flipped cards drawn upside down; split/Room/Battle cards turned in the zoom panel; **R** rotates the zoomed card.
+- Shaders (Iris/Oculus detected via `net.irisshaders.iris.api.v0.IrisApi`): additive glow geometry is skipped (it made
+  see-through holes) and 3D cards use entityCutoutNoCull. Held card items use the large texture; first-person bigger.
+- Champions are recorded per level (`SavedData` "mtgcraft_champions", one per 96 blocks); extras and 1 in 6 new
+  villagers become Village Duelists (own skin `textures/entity/duelist.png`, spared like Champions). Egg Champions stay.
+- Champion win: Champion Pack + 10% Booster Pick ticket + best card. World Cup is now a block (`world_cup`, same item
+  id): on a Magic Table within 12 blocks it unlocks Reward duels (or carry it). Quest rewards: 2-3 packs, Picks.
+- Engine audit: every IGuiGame prompt is handled (one/many/insertInList fall back to getChoices). Blocking flow is
+  correct (attacker then blocker); evasion (flying, menace...) is the engine's rules. Still need card names for 46/48.

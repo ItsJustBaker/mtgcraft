@@ -21,19 +21,24 @@ import net.minecraftforge.fml.common.Mod;
 @Mod.EventBusSubscriber(modid = MtgCraft.MODID, value = Dist.CLIENT)
 public final class ChampionRenderer {
     private static final ResourceLocation SKIN = new ResourceLocation(MtgCraft.MODID, "textures/entity/champion.png");
+    private static final ResourceLocation DUELIST_SKIN = new ResourceLocation(MtgCraft.MODID, "textures/entity/duelist.png");
     private static PlayerModel<Villager> model;
     private static Boolean hasSkin;
 
     private ChampionRenderer() {}
 
-    /** Champions carry this name (synced to clients, unlike entity tags). */
-    private static boolean champion(Villager v) {
-        return v.hasCustomName() && "Village Champion".equals(v.getCustomName().getString());
+    /** The skin for a Champion or a Duelist (known by their names, which reach clients, unlike entity tags), else null. */
+    private static ResourceLocation skin(Villager v) {
+        if (!v.hasCustomName()) return null;
+        String n = v.getCustomName().getString();
+        return "Village Champion".equals(n) ? SKIN : "Village Duelist".equals(n) ? DUELIST_SKIN : null;
     }
 
     @SubscribeEvent
     public static void render(RenderLivingEvent.Pre<?, ?> event) {
-        if (!(event.getEntity() instanceof Villager v) || !champion(v)) return;
+        if (!(event.getEntity() instanceof Villager v)) return;
+        ResourceLocation tex = skin(v);
+        if (tex == null) return;
         Minecraft mc = Minecraft.getInstance();
         if (hasSkin == null) hasSkin = mc.getResourceManager().getResource(SKIN).isPresent();
         if (!hasSkin) return;
@@ -68,7 +73,7 @@ public final class ChampionRenderer {
         model.young = false;
         model.prepareMobModel(v, limb, limbAmount, pt);
         model.setupAnim(v, limb, limbAmount, v.tickCount + pt, headYaw, pitch);
-        model.renderToBuffer(ps, event.getMultiBufferSource().getBuffer(model.renderType(SKIN)), light,
+        model.renderToBuffer(ps, event.getMultiBufferSource().getBuffer(model.renderType(tex)), light,
                 LivingEntityRenderer.getOverlayCoords(v, 0), 1, 1, 1, 1);
         ps.popPose();
     }

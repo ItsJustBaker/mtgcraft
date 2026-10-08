@@ -14,7 +14,7 @@
 			description: ["Get a Duel Gauntlet, a Duel Disk or a Starter Kit. Right-click a mob with your gear to duel it!"]
 			id: "4D5447435241F100"
 			rewards: [
-				{ id: "4D5447435241F1B1", item: { Count: 1, id: "mtgcraft:booster_pack", tag: { Theme: "OVERWORLD" } }, type: "item" }
+				{ id: "4D5447435241F1B1", item: { Count: 2, id: "mtgcraft:booster_pack", tag: { Theme: "OVERWORLD" } }, type: "item" }
 				{ id: "4D5447435241F1B2", type: "xp", xp: 20 }
 			]
 			tasks: [{ advancement: "mtgcraft:quests/root", criterion: "", id: "4D5447435241F1A1", type: "advancement" }]
@@ -27,7 +27,7 @@
 			description: ["Open a booster pack. Mobs drop them, villagers trade them, and loot chests hide them."]
 			id: "4D5447435241F200"
 			rewards: [
-				{ id: "4D5447435241F2B1", item: { Count: 1, id: "mtgcraft:booster_pack", tag: { Theme: "VILLAGE" } }, type: "item" }
+				{ id: "4D5447435241F2B1", item: { Count: 2, id: "mtgcraft:booster_pack", tag: { Theme: "VILLAGE" } }, type: "item" }
 				{ id: "4D5447435241F2B2", type: "xp", xp: 20 }
 			]
 			tasks: [{ advancement: "mtgcraft:quests/open_pack", criterion: "", id: "4D5447435241F2A1", type: "advancement" }]
@@ -40,7 +40,7 @@
 			description: ["Make a Deck Box and build a deck of at least 40 cards."]
 			id: "4D5447435241F300"
 			rewards: [
-				{ id: "4D5447435241F3B1", item: { Count: 1, id: "mtgcraft:booster_pack", tag: { Theme: "CAVE" } }, type: "item" }
+				{ id: "4D5447435241F3B1", item: { Count: 2, id: "mtgcraft:booster_pack", tag: { Theme: "CAVE" } }, type: "item" }
 				{ id: "4D5447435241F3B2", type: "xp", xp: 30 }
 			]
 			tasks: [{ advancement: "mtgcraft:quests/build_deck", criterion: "", id: "4D5447435241F3A1", type: "advancement" }]
@@ -53,7 +53,7 @@
 			description: ["Win a duel against a mob."]
 			id: "4D5447435241F400"
 			rewards: [
-				{ id: "4D5447435241F4B1", item: { Count: 1, id: "mtgcraft:booster_pack", tag: { Theme: "UNDEAD" } }, type: "item" }
+				{ id: "4D5447435241F4B1", item: { Count: 2, id: "mtgcraft:booster_pack", tag: { Theme: "UNDEAD" } }, type: "item" }
 				{ id: "4D5447435241F4B2", type: "xp", xp: 50 }
 			]
 			tasks: [{ advancement: "mtgcraft:quests/first_win", criterion: "", id: "4D5447435241F4A1", type: "advancement" }]
@@ -68,6 +68,7 @@
 			rewards: [
 				{ id: "4D5447435241F5B1", item: { Count: 3, id: "mtgcraft:booster_pack", tag: { Theme: "NETHER" } }, type: "item" }
 				{ id: "4D5447435241F5B2", type: "xp", xp: 150 }
+				{ id: "4D5447435241F5B3", item: { Count: 1, id: "mtgcraft:booster_pack", tag: { Pick: "PACK" } }, type: "item" }
 			]
 			tasks: [{ advancement: "mtgcraft:quests/ten_wins", criterion: "", id: "4D5447435241F5A1", type: "advancement" }]
 			title: "Seasoned Duelist"
@@ -81,6 +82,7 @@
 			rewards: [
 				{ id: "4D5447435241F6B1", item: { Count: 3, id: "mtgcraft:booster_pack", tag: { Theme: "END" } }, type: "item" }
 				{ id: "4D5447435241F6B2", type: "xp", xp: 300 }
+				{ id: "4D5447435241F6B3", item: { Count: 1, id: "mtgcraft:booster_pack", tag: { Pick: "BOX" } }, type: "item" }
 			]
 			tasks: [{ advancement: "mtgcraft:quests/boss", criterion: "", id: "4D5447435241F6A1", type: "advancement" }]
 			title: "Giant Slayer"
@@ -94,6 +96,7 @@
 			rewards: [
 				{ id: "4D5447435241F7B1", item: { Count: 2, id: "mtgcraft:booster_pack", tag: { Theme: "RAID" } }, type: "item" }
 				{ id: "4D5447435241F7B2", type: "xp", xp: 200 }
+				{ id: "4D5447435241F7B3", item: { Count: 1, id: "mtgcraft:booster_pack", tag: { Pick: "PACK" } }, type: "item" }
 			]
 			tasks: [{ advancement: "mtgcraft:quests/world_cup", criterion: "", id: "4D5447435241F7A1", type: "advancement" }]
 			title: "Champion of the Village"
@@ -105,7 +108,7 @@
 			description: ["Craft a Duel Familiar (amethyst and an Eye of Ender), teach it a deck, and it fights at your side."]
 			id: "4D5447435241F800"
 			rewards: [
-				{ id: "4D5447435241F8B1", item: { Count: 1, id: "mtgcraft:booster_pack", tag: { Theme: "CELESTIAL" } }, type: "item" }
+				{ id: "4D5447435241F8B1", item: { Count: 2, id: "mtgcraft:booster_pack", tag: { Theme: "CELESTIAL" } }, type: "item" }
 				{ id: "4D5447435241F8B2", type: "xp", xp: 50 }
 			]
 			tasks: [{ advancement: "mtgcraft:quests/familiar", criterion: "", id: "4D5447435241F8A1", type: "advancement" }]
@@ -118,7 +121,7 @@
 			description: ["Join a party (right-click a friend with your gear), then beam into their duel from anywhere."]
 			id: "4D5447435241F900"
 			rewards: [
-				{ id: "4D5447435241F9B1", item: { Count: 1, id: "mtgcraft:booster_pack", tag: { Theme: "STARBOUND" } }, type: "item" }
+				{ id: "4D5447435241F9B1", item: { Count: 2, id: "mtgcraft:booster_pack", tag: { Theme: "STARBOUND" } }, type: "item" }
 				{ id: "4D5447435241F9B2", type: "xp", xp: 50 }
 			]
 			tasks: [{ advancement: "mtgcraft:quests/holo", criterion: "", id: "4D5447435241F9A1", type: "advancement" }]
@@ -131,7 +134,7 @@
 			description: ["Craft a Duel Disk from your Duel Gauntlet."]
 			id: "4D5447435241FA00"
 			rewards: [
-				{ id: "4D5447435241FAB1", item: { Count: 1, id: "mtgcraft:booster_pack", tag: { Theme: "DRAGONFIRE" } }, type: "item" }
+				{ id: "4D5447435241FAB1", item: { Count: 2, id: "mtgcraft:booster_pack", tag: { Theme: "DRAGONFIRE" } }, type: "item" }
 				{ id: "4D5447435241FAB2", type: "xp", xp: 50 }
 			]
 			tasks: [{ id: "4D5447435241FAA1", item: { Count: 1, id: "mtgcraft:duel_disk" }, type: "item" }]

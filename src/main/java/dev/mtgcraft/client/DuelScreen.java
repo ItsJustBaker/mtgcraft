@@ -61,6 +61,13 @@ public class DuelScreen extends Screen {
             this.x = x; this.y = y; this.w = w; this.h = h; this.rot = rot;
         }
 
+        /** Hit test at the card's resting spot (hand cards lift when hovered; testing the lifted card made them flicker). */
+        boolean containsAtRest(double mx, double my) {
+            boolean sideways = Math.abs(Math.sin(Math.toRadians(rot))) > 0.7;
+            float cx = x + w / 2, cy = y + h / 2, hw = (sideways ? h : w) / 2, hh = (sideways ? w : h) / 2;
+            return mx >= cx - hw && mx <= cx + hw && my >= cy - hh && my <= cy + hh;
+        }
+
         boolean contains(double mx, double my, Anim a) {
             float cx = a.x + w / 2, cy = a.y + h / 2;
             boolean sideways = Math.abs(Math.sin(Math.toRadians(a.rot))) > 0.7;
@@ -154,6 +161,8 @@ public class DuelScreen extends Screen {
     private CardView viewerHover;
     private final List<Hit> viewerHits = new ArrayList<>();
     private boolean showLog;
+    /** The stat sheet: every player's life, counters, mana and zones at a glance (the Stats button). */
+    private boolean showStats;
 
     public DuelScreen(DuelGui duel, net.minecraft.core.BlockPos table) {
         super(Component.literal("Magic Table"));
@@ -321,6 +330,7 @@ public class DuelScreen extends Screen {
         if (!overlay) drawStepBanner(g, view, me, req);
         drawSidebar(g, view, me, opp, mouseX, mouseY, now);
         if (showLog && !overlay) drawLog(g, view);
+        if (showStats && !overlay) drawStats(g, view);
         viewerHover = null;
         if (viewer) drawViewer(g, view, me, mouseX, mouseY, now);
         else if (!overlay && startingPlayerPrompt()) drawStarterPicker(g, view, mouseX, mouseY);
@@ -658,7 +668,7 @@ public class DuelScreen extends Screen {
             float tx = p.x, ty = p.y, trot = p.rot, tscale = 1;
             if (p == hovered && (p.zone == Zone.HAND || p.zone == Zone.COMMAND)) {
                 // Lift the card right up, big (and so drawn from the sharp texture): readable without the zoom panel.
-                tscale = 1.9f;
+                tscale = 1.5f;
                 ty = height - p.h * tscale - 6;
                 trot = 0;
             } else if (p == hovered) {
@@ -1035,8 +1045,42 @@ public class DuelScreen extends Screen {
         drawCardFace(g, c, x, y, w, h, alpha, false);
     }
 
+    /** Set while the zoom panel draws: sideways-printed cards (split, Room, Battle) are turned to read there. */
+    private boolean zoomDrawing;
+    private boolean turning;
+    /** Extra quarter turns for the zoom panel (R), and the card they apply to. */
+    private int zoomTurns;
+    private CardView zoomTurnCard;
+
     private void drawCardFace(GuiGraphics g, CardView c, float x, float y, float w, float h, float alpha, boolean forceLarge) {
-        CardStateView s = c == showBackOf && c.getAlternateState() != null ? c.getAlternateState() : c.getCurrentState();
+        if (!turning) {
+            boolean flipped = c.isFlipped();
+            boolean sideways = zoomDrawing && (c.isSplitCard() || c.isRoom() || (c.getCurrentState() != null && c.getCurrentState().isBattle()));
+            int turns = (flipped ? 2 : 0) + (sideways ? 1 : 0) + (zoomDrawing && zoomTurnCard == c ? zoomTurns : 0);
+            sideways = turns % 2 == 1;
+            flipped = turns % 4 == 2;
+            if (turns % 4 != 0) {
+                // Flip cards read upside down once flipped; split cards, Rooms and Battles are printed sideways.
+                float cw = w, ch = h;
+                if (sideways) {
+                    float k = Math.min(w / h, h / w);
+                    cw = w * k;
+                    ch = h * k;
+                }
+                g.pose().pushPose();
+                g.pose().translate(x + w / 2, y + h / 2, 0);
+                g.pose().mulPose(com.mojang.math.Axis.ZP.rotationDegrees(90 * (turns % 4)));
+                turning = true;
+                try {
+                    drawCardFace(g, c, -cw / 2, -ch / 2, cw, ch, alpha, forceLarge || sideways);
+                } finally {
+                    turning = false;
+                    g.pose().popPose();
+                }
+                return;
+            }
+        }
+        CardStateView s =c == showBackOf && c.getAlternateState() != null ? c.getAlternateState() : c.getCurrentState();
         String key = s.getImageKey(duel.getLocalPlayers());
         // Pick the texture by on-screen pixels, not GUI units, so text stays sharp at any GUI scale.
         double realH = h * minecraft.getWindow().getGuiScale();
@@ -1428,10 +1472,15 @@ public class DuelScreen extends Screen {
             // Two-sided cards: hold Shift to see the other side.
             boolean twoSided = zoomCard.getAlternateState() != null;
             if (twoSided && hasShiftDown()) showBackOf = zoomCard;
-            drawCardFace(g, zoomCard, zoomX, zoomY, zoomW, zoomH, 1f);
+            zoomDrawing = true;
+            try {
+                drawCardFace(g, zoomCard, zoomX, zoomY, zoomW, zoomH, 1f);
+            } finally {
+                zoomDrawing = false;
+            }
             showBackOf = null;
             if (twoSided) {
-                String hint = hasShiftDown() ? "Other side" : "Hold Shift: other side";
+                String hint = hasShiftDown() ? "Other side" : "Shift: other side  R: rotate";
                 int hw = font.width(hint) + 8;
                 Theme.rounded(g, zoomX + (zoomW - hw) / 2, zoomY + zoomH - 14, hw, 12, 0xD0101010);
                 g.drawCenteredString(font, hint, zoomX + zoomW / 2, zoomY + zoomH - 12, Theme.GOLD);
@@ -1477,10 +1526,12 @@ public class DuelScreen extends Screen {
         boolean arenaToggle = ArenaRenderer.has(table);
         // Creative mode gets a cheat button that wins the duel on the spot.
         boolean creative = minecraft.player != null && minecraft.player.isCreative() && !duel.isOver();
-        int n = 4 + (arenaToggle ? 1 : 0) + (creative ? 1 : 0);
+        int n = 5 + (arenaToggle ? 1 : 0) + (creative ? 1 : 0);
         int bw = (w - (n - 1) * 3) / n;
         int bx = x;
         toolButton(g, "Log", bx, bw, mx, my, showLog, () -> showLog = !showLog);
+        bx += bw + 3;
+        toolButton(g, "Stats", bx, bw, mx, my, showStats, () -> showStats = !showStats);
         bx += bw + 3;
         toolButton(g, "Zones", bx, bw, mx, my, viewerOpen, () -> {
             if (viewerOpen) viewerOpen = false;
@@ -1615,13 +1666,17 @@ public class DuelScreen extends Screen {
             hits.add(new Hit(cx, y - 1, cw, 9, () -> openViewer(p, z)));
             cx += cw + 2;
         }
-        int poison = 0;
-        if (p.getCounters() != null) {
-            for (var t : p.getCounters().elementSet()) if (t.getName().equalsIgnoreCase("poison")) poison = p.getCounters().count(t);
-        }
         int cmdDamage = commanderDamageTaken(view, p);
         List<String> extra = new ArrayList<>();
-        if (poison > 0) extra.add("☠" + poison);
+        // Every player counter in words (poison from toxic/infect is lethal at 10).
+        if (p.getCounters() != null) {
+            for (var t : p.getCounters().elementSet()) {
+                int n = p.getCounters().count(t);
+                if (n <= 0) continue;
+                String name = t.getName();
+                extra.add(name.equalsIgnoreCase("poison") ? "Poison " + n + "/10" : name + " " + n);
+            }
+        }
         if (cmdDamage > 0) extra.add("♛" + cmdDamage + "/21");
         for (String e : extra) {
             int cw = (int) (font.width(e) * s) + 4;
@@ -1750,6 +1805,57 @@ public class DuelScreen extends Screen {
         }
     }
 
+    /** The stat sheet panel (top left): one block per player. */
+    private void drawStats(GuiGraphics g, GameView view) {
+        List<PlayerView> players = new ArrayList<>();
+        for (PlayerView p : view.getPlayers()) players.add(p);
+        int x = 6, y = 24, w = 178, lh = 10;
+        List<List<String>> blocks = new ArrayList<>();
+        for (PlayerView p : players) {
+            List<String> lines = new ArrayList<>();
+            lines.add(p.getName() + "  -  Life " + p.getLife());
+            List<String> counters = new ArrayList<>();
+            if (p.getCounters() != null) {
+                for (var t : p.getCounters().elementSet()) {
+                    int n = p.getCounters().count(t);
+                    if (n > 0) counters.add((t.getName().equalsIgnoreCase("poison") ? "Poison " + n + "/10" : t.getName() + " " + n));
+                }
+            }
+            lines.add(counters.isEmpty() ? "No counters" : String.join(", ", counters));
+            int[] ms = manaSources(p);
+            StringBuilder pool = new StringBuilder();
+            String[] sym = {"W", "U", "B", "R", "G", "C"};
+            byte[] col = {forge.card.MagicColor.WHITE, forge.card.MagicColor.BLUE, forge.card.MagicColor.BLACK, forge.card.MagicColor.RED,
+                    forge.card.MagicColor.GREEN, forge.card.MagicColor.COLORLESS};
+            for (int i = 0; i < sym.length; i++) {
+                int n = p.getMana(col[i]);
+                if (n > 0) pool.append(sym[i]).append(n).append(" ");
+            }
+            lines.add("Mana sources " + ms[0] + "/" + ms[1] + " untapped" + (pool.length() > 0 ? "  Pool: " + pool.toString().trim() : ""));
+            lines.add("Hand " + cards(p.getCards(ZoneType.Hand)).size() + "  Library " + cards(p.getCards(ZoneType.Library)).size()
+                    + "  Graveyard " + cards(p.getCards(ZoneType.Graveyard)).size() + "  Exile " + cards(p.getCards(ZoneType.Exile)).size());
+            int cmd = commanderDamageTaken(view, p);
+            if (cmd > 0) lines.add("Commander damage taken " + cmd + "/21");
+            blocks.add(lines);
+        }
+        int h = 6;
+        for (List<String> b : blocks) h += b.size() * lh + 6;
+        Theme.rounded(g, x, y, w, h, 0xE0101418);
+        int yy = y + 4;
+        for (List<String> b : blocks) {
+            for (int i = 0; i < b.size(); i++) {
+                g.pose().pushPose();
+                g.pose().translate(x + 5, yy, 0);
+                float s = Math.min(1f, (w - 10) / (float) Math.max(1, font.width(b.get(i))));
+                g.pose().scale(s, s, 1);
+                g.drawString(font, b.get(i), 0, 0, i == 0 ? Theme.GOLD : Theme.TEXT, false);
+                g.pose().popPose();
+                yy += lh;
+            }
+            yy += 6;
+        }
+    }
+
     /** {untapped, total} permanents a player controls that can make mana. */
     private static int[] manaSources(PlayerView p) {
         int untapped = 0, total = 0;
@@ -1760,7 +1866,11 @@ public class DuelScreen extends Screen {
                 if (st == null) continue;
                 boolean source;
                 try {
-                    source = st.isLand() || st.origProduceAnyMana() || st.origProduceMana() != null;
+                    forge.card.ColorSet makes = st.origProduceMana();
+                    String text = st.getAbilityText();
+                    // Lands, anything that makes coloured mana, and colourless rocks ("Add {C}") - not every permanent.
+                    source = st.isLand() || st.origProduceAnyMana() || (makes != null && !makes.isColorless())
+                            || (text != null && text.contains("Add {"));
                 } catch (NullPointerException unsynced) {
                     source = st.isLand();
                 }
@@ -2457,7 +2567,8 @@ public class DuelScreen extends Screen {
         for (int i = 0; i < placed.size(); i++) {
             Placed p = placed.get(i);
             Anim a = anims.get(p.card.getId());
-            if (a == null || !p.contains(mx, my, a)) continue;
+            boolean rest = p.zone == Zone.HAND || p.zone == Zone.COMMAND;
+            if (a == null || !(rest ? p.containsAtRest(mx, my) : p.contains(mx, my, a))) continue;
             int rank = switch (p.zone) {
                 case TRAY -> 3000 + i;
                 case HAND, COMMAND -> 2000 + i;
@@ -2897,6 +3008,15 @@ public class DuelScreen extends Screen {
 
     @Override
     public boolean keyPressed(int key, int scan, int mods) {
+        if (key == GLFW.GLFW_KEY_R && zoomCard != null) {
+            // Turn the zoomed card a quarter turn, to read anything printed sideways or upside down.
+            if (zoomTurnCard != zoomCard) {
+                zoomTurnCard = zoomCard;
+                zoomTurns = 0;
+            }
+            zoomTurns = (zoomTurns + 1) % 4;
+            return true;
+        }
         if (key == GLFW.GLFW_KEY_ESCAPE && viewerOpen) {
             viewerOpen = false;
             return true;
