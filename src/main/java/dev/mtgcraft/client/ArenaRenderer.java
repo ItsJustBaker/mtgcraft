@@ -120,7 +120,7 @@ public final class ArenaRenderer {
         if (a == null) return;
         // The world beyond the arena is pulled away: the fog closes in from normal view distance to just past the stars.
         float p = voidArena(a) ? pull(a) : 0;
-        float near = a.radius() * 1.1f, far = a.radius() * (voidArena(a) ? 2.0f : 3.2f);
+        float near = a.radius() * (voidArena(a) ? 2.6f : 1.1f), far = a.radius() * (voidArena(a) ? 4.2f : 3.2f);
         event.setNearPlaneDistance(near + (event.getNearPlaneDistance() - near) * (1 - p));
         event.setFarPlaneDistance(far + (event.getFarPlaneDistance() - far) * (1 - p));
         event.setCanceled(true);
@@ -145,9 +145,8 @@ public final class ArenaRenderer {
      * upward in a sweeping wave with a bright violet edge, then twinkling stars. It is drawn as solid entity geometry
      * (full-bright), which shader packs render like any mob, and which hides clouds and terrain behind it.
      */
-    @SubscribeEvent
-    public static void stars(RenderLevelStageEvent event) {
-        if (event.getStage() != RenderLevelStageEvent.Stage.AFTER_TRANSLUCENT_BLOCKS || ARENAS.isEmpty()) return;
+    /** Called from {@link #render} before its single flush, exactly like the stage floor (shader packs place it right). */
+    private static void drawVoid(RenderLevelStageEvent event, MultiBufferSource buffers) {
         Camera cam = event.getCamera();
         Packets.Arena a = around(cam.getPosition());
         if (a == null || !voidArena(a)) return;
@@ -155,8 +154,7 @@ public final class ArenaRenderer {
         long now = System.currentTimeMillis();
         Vec3 c = new Vec3(a.x(), a.y(), a.z()).subtract(cam.getPosition());
         Matrix4f m = event.getPoseStack().last().pose();
-        MultiBufferSource.BufferSource buffers = Minecraft.getInstance().renderBuffers().bufferSource();
-        RenderType type = RenderType.entitySolid(WHITE);
+        RenderType type = RenderType.entityTranslucent(WHITE);
         VertexConsumer vc = buffers.getBuffer(type);
         double r = a.radius() * 1.45 + 2;
 
@@ -200,7 +198,6 @@ public final class ArenaRenderer {
                 quad(vc, m, s.subtract(l).add(u), s.add(l).add(u), s.add(l).subtract(u), s.subtract(l).subtract(u), col, n);
             }
         }
-        buffers.endBatch(type);
     }
 
     private static Vec3 sph(Vec3 c, double r, double theta, double phi) {
@@ -225,7 +222,7 @@ public final class ArenaRenderer {
         for (Vec3 v : new Vec3[]{a, b, c, d}) {
             vc.vertex(m, (float) v.x, (float) v.y, (float) v.z).color(rgb >> 16 & 255, rgb >> 8 & 255, rgb & 255, 255)
                     .uv(0.5f, 0.5f).overlayCoords(net.minecraft.client.renderer.texture.OverlayTexture.NO_OVERLAY)
-                    .uv2(0xF000F0).normal((float) n.x, (float) n.y, (float) n.z).endVertex();
+                    .uv2(0xF000F0).normal(0, 1, 0).endVertex();
         }
     }
 
@@ -258,6 +255,7 @@ public final class ArenaRenderer {
                 // Game state changed mid-frame; the next frame draws it.
             }
         }
+        drawVoid(event, buffers);
         buffers.endBatch();
     }
 
