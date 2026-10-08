@@ -292,3 +292,24 @@ Still not done: group PvP (pull nearby players into one free-for-all), deck scre
 real booster art at runtime (no public pack-image source; plan: Scryfall card art on set packs via a BEWLR), arena v2
 (floor, shader check), teleport-mid-duel bug (10; Fix button is the workaround), card names for bugs 46/48, more ATM9
 themes (5 of 20), playing your familiar yourself, per-theme art for the 10 new themes.
+
+### Session 9, part 3: playtest round on 0.3.0
+User feedback: Duel Disk fit perfect but looked like a shield; arena unchanged (they use Complementary + Euphoria
+shaders, which ignore fog; stars were too small); glove looked like a box in the hand; wanted glove/disk pick at deck
+pick; quests must be ATM9 (FTB Quests) quests. Everything else worked.
+- Arena: `ArenaRenderer.stars` now draws an emissive translucent sphere ("deep space", r = 1.45R + 2) + 320 stars
+  with `RenderType.entityTranslucentEmissive(mtgcraft:textures/misc/white.png)`, the same path as the stage floor
+  (which renders under shaders). Fades in over 1.5 s.
+- Glove: drawn as an armour-like overlay on the arm's sleeve layer (`textures/entity/glove.png`, skin UV layout) in
+  first and third person; the 3D gauntlet model is now only the inventory icon.
+- Duel Disk model rebuilt: bracer, wrist hub with deck slot, 18px blade sticking out sideways with 4 glowing zones.
+- After the starter deck: "Pick your dueling gear" prompt (`/mtgduel style glove|disk`, re-offered on join while
+  pending). Disk -> gauntlet shapeless recipe.
+- Quests: `server/AtmQuests` copies `data/mtgcraft/ftbquests/mtgcraft.snbt` into config/ftbquests/quests/chapters at
+  common setup when FTB Quests is loaded (10 quests, pack + XP rewards, ids 4D5447435241F*). The vanilla advancements
+  are now display-less triggers used by the chapter's advancement tasks.
+- 3 more ATM9 themes: VOID (voidscape), ANGLER (aquaculture), ALFHEIM (mythicbotany) — 8 ATM9 themes total.
+- Group PvP: gear in group mode + Friendly → everyone nearby with gear is invited; starts after 30 s as a
+  free-for-all (`startPvp(List...)`, `GROUP_PVP`, `startGroupDuels`).
+Still open: deck screen revamp (needs the user's input), runtime booster art, playing your own familiar, per-theme art
+for the new themes, teleport-mid-duel bug, bugs 46/48 (card names).

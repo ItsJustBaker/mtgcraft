@@ -1,6 +1,4 @@
 {
   "parent": "mtgcraft:quests/root",
-  "display": { "icon": { "item": "mtgcraft:duel_gauntlet" }, "title": "First Blood", "description": "Win a duel against a mob",  "frame": "task", "show_toast": true, "announce_to_chat": true },
-  "criteria": { "done": { "trigger": "minecraft:impossible" } },
-  "rewards": { "loot": ["mtgcraft:quests/pack"], "experience": 50 }
+  "criteria": { "done": { "trigger": "minecraft:impossible" } }
 }

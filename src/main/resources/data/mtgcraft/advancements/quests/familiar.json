@@ -1,6 +1,4 @@
 {
   "parent": "mtgcraft:quests/root",
-  "display": { "icon": { "item": "mtgcraft:familiar_orb" }, "title": "A Friend in the Void", "description": "Craft a Duel Familiar",  "frame": "task", "show_toast": true, "announce_to_chat": true },
-  "criteria": { "done": { "trigger": "minecraft:inventory_changed", "conditions": { "items": [ { "items": ["mtgcraft:familiar_orb"] } ] } } },
-  "rewards": { "loot": ["mtgcraft:quests/pack"], "experience": 50 }
+  "criteria": { "done": { "trigger": "minecraft:inventory_changed", "conditions": { "items": [ { "items": ["mtgcraft:familiar_orb"] } ] } } }
 }

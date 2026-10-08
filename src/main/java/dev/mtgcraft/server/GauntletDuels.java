@@ -1090,6 +1090,35 @@ public final class GauntletDuels {
         return l != null && l.joined.contains(p.getUUID());
     }
 
+    /** Group duels whose gathering time is up start now, with everyone who accepted and is still close by. */
+    private static void startGroupDuels() {
+        var server = net.minecraftforge.server.ServerLifecycleHooks.getCurrentServer();
+        if (server == null) return;
+        for (var it = GROUP_PVP.entrySet().iterator(); it.hasNext(); ) {
+            var e = it.next();
+            GroupPvp g = e.getValue();
+            if (tick < g.deadline) continue;
+            it.remove();
+            ServerPlayer host = server.getPlayerList().getPlayer(e.getKey());
+            if (host == null || inDuel(host.getUUID())) continue;
+            List<ServerPlayer> all = new ArrayList<>(List.of(host));
+            List<DeckChoice> decks = new ArrayList<>();
+            DeckChoice hd = deckOf(host, false);
+            if (hd == null) continue;
+            decks.add(hd);
+            for (UUID id : g.accepted) {
+                ServerPlayer p = server.getPlayerList().getPlayer(id);
+                if (p == null || inDuel(id) || p.level() != host.level() || p.distanceTo(host) > JOIN_RANGE) continue;
+                DeckChoice dc = deckOf(p, true);
+                if (dc == null) continue;
+                all.add(p);
+                decks.add(dc);
+            }
+            if (all.size() < 2) tell(host, "Nobody joined your group duel.");
+            else startPvp(all, decks, g.stake, g.commander);
+        }
+    }
+
     /** What each pending invite plays for: invitee -> inviter -> "STAKE FORMAT". */
     private static final Map<UUID, Map<UUID, String>> STAKES = new HashMap<>();
     /** Reward duels already won today: "winner|loser" -> Minecraft day. */
@@ -1105,7 +1134,51 @@ public final class GauntletDuels {
     }
 
     /** The second step of a player challenge, from the duel-type menu. */
+    /** A group duel being gathered: everyone who accepts before the deadline plays one free-for-all. */
+    private static final class GroupPvp {
+        String stake;
+        boolean commander;
+        long deadline;
+        final Set<UUID> invited = new HashSet<>();
+        final List<UUID> accepted = new ArrayList<>();
+    }
+
+    private static final Map<UUID, GroupPvp> GROUP_PVP = new HashMap<>();
+
+    private static ItemStack gearOf(ServerPlayer p) {
+        if (p.getMainHandItem().getItem() instanceof GauntletItem) return p.getMainHandItem();
+        if (p.getOffhandItem().getItem() instanceof GauntletItem) return p.getOffhandItem();
+        for (ItemStack s : p.getInventory().items) if (s.getItem() instanceof GauntletItem) return s;
+        return ItemStack.EMPTY;
+    }
+
+    /**
+     * From the duel-type menu. With the gear in group mode, a friendly duel invites everyone nearby with gear too, and
+     * starts in 30 seconds with everyone who accepted (a free-for-all).
+     */
     private static void challengeWith(ServerPlayer from, ServerPlayer to, String stake, boolean commander) {
+        ItemStack gear = gearOf(from);
+        if (!"FRIENDLY".equals(stake) || gear.isEmpty() || !GauntletItem.groupFights(gear) || inDuel(from.getUUID())) {
+            sendChallenge(from, to, stake, commander);
+            return;
+        }
+        GroupPvp g = new GroupPvp();
+        g.stake = stake;
+        g.commander = commander;
+        g.deadline = tick + 20 * 30;
+        List<ServerPlayer> targets = new ArrayList<>(List.of(to));
+        for (ServerPlayer o : from.serverLevel().getEntitiesOfClass(ServerPlayer.class, from.getBoundingBox().inflate(FRIEND_RANGE * 2))) {
+            if (o != from && o != to && !inDuel(o.getUUID()) && holdsGauntlet(o)) targets.add(o);
+        }
+        GROUP_PVP.put(from.getUUID(), g);
+        for (ServerPlayer t : targets) {
+            g.invited.add(t.getUUID());
+            sendChallenge(from, t, stake, commander);
+        }
+        tell(from, "Group duel: " + targets.size() + " invited. It starts in 30 seconds with everyone who accepts.");
+    }
+
+    private static void sendChallenge(ServerPlayer from, ServerPlayer to, String stake, boolean commander) {
         if (!List.of("FRIENDLY", "DEATH", "ANTE", "REWARD").contains(stake)) return;
         if ("REWARD".equals(stake) && !Champions.hasCup(from)) {
             tell(from, "Reward duels need the MTG World Cup: beat a Village Champion to win it.");
@@ -1171,6 +1244,13 @@ public final class GauntletDuels {
             tell(from, "You need a ready Deck Box to duel " + to.getGameProfile().getName() + ".");
             return;
         }
+        GroupPvp group = GROUP_PVP.get(from.getUUID());
+        if (group != null && group.invited.contains(to.getUUID())) {
+            if (!group.accepted.contains(to.getUUID())) group.accepted.add(to.getUUID());
+            tell(to, "You're in! The group duel starts soon.");
+            tell(from, to.getGameProfile().getName() + " joined your group duel.");
+            return;
+        }
         String[] t = terms.split(" ");
         startPvp(from, theirs, to, mine, t[0], t.length < 2 || t[1].equals("C"));
     }
@@ -1181,26 +1261,41 @@ public final class GauntletDuels {
     }
 
     private static void startPvp(ServerPlayer a, DeckChoice da, ServerPlayer b, DeckChoice db, String stake, boolean wantCommander) {
+        startPvp(List.of(a, b), List.of(da, db), stake, wantCommander);
+    }
+
+    /** A player duel for two or more players, each on their own side (a free-for-all when there are more than two). */
+    private static void startPvp(List<ServerPlayer> all, List<DeckChoice> decks, String stake, boolean wantCommander) {
+        ServerPlayer a = all.get(0), b = all.get(1);
         Duel d = new Duel();
         d.pvp = true;
         d.stake = stake;
         d.level = a.serverLevel();
-        d.radius = 5f + (float) Math.max(0, Math.max(a.getBbWidth(), b.getBbWidth()) - 1) * 1.3f;
-        Vec3 mid = a.position().add(b.position()).scale(0.5);
+        float widest = 0;
+        Vec3 sum = Vec3.ZERO;
+        for (ServerPlayer p : all) {
+            widest = Math.max(widest, p.getBbWidth());
+            sum = sum.add(p.position());
+        }
+        d.radius = 5f + (all.size() - 2) * 1.2f + Math.max(0, widest - 1) * 1.3f;
+        Vec3 mid = sum.scale(1.0 / all.size());
         d.center = new Vec3(mid.x, stageHeight(d.level, mid, d.radius + 1.5f), mid.z);
 
         boolean commander = wantCommander;
-        if (commander && !(commanderReady(da) && commanderReady(db))) {
+        boolean allReady = true;
+        for (DeckChoice dc : decks) allReady &= commanderReady(dc);
+        if (commander && !allReady) {
             commander = false;
-            for (ServerPlayer p : List.of(a, b)) tell(p, "Classic duel: Commander needs a 100-card deck with a commander for both of you.");
+            for (ServerPlayer p : all) tell(p, "Classic duel: Commander needs a 100-card deck with a commander for both of you.");
         }
         MatchSetup setup = new MatchSetup();
         setup.mode = commander ? MatchSetup.Mode.COMMANDER : MatchSetup.Mode.TEAMS;
         List<Entity> seatEntities = new ArrayList<>();
         int team = 1;
-        for (ServerPlayer p : List.of(a, b)) {
+        for (int i = 0; i < all.size(); i++) {
+            ServerPlayer p = all.get(i);
             d.players.put(p.getUUID(), setup.seats.size());
-            setup.seats.add(new MatchSetup.Seat(false, p.getGameProfile().getName(), p.getUUID(), p == a ? da : db, team++));
+            setup.seats.add(new MatchSetup.Seat(false, p.getGameProfile().getName(), p.getUUID(), decks.get(i), team++));
             seatEntities.add(p);
         }
         d.setup = setup;
@@ -1210,7 +1305,7 @@ public final class GauntletDuels {
         BlockPos key = BlockPos.containing(d.center);
         d.live = DuelHosting.launch(a.getServer(), setup, key, true,
                 err -> {
-                    for (ServerPlayer p : List.of(a, b)) tell(p, "The duel couldn't start: " + err);
+                    for (ServerPlayer p : all) tell(p, "The duel couldn't start: " + err);
                     end(d, null);
                 },
                 result -> end(d, result));
@@ -1221,9 +1316,11 @@ public final class GauntletDuels {
             seats.add(new Packets.ArenaSeat(setup.seats.get(i).name, seatEntities.get(i).getId()));
         }
         Packets.Arena arena = new Packets.Arena(key, d.center.x, d.center.y, d.center.z, d.radius, false, seats);
-        for (ServerPlayer p : List.of(a, b)) {
+        List<String> names = new ArrayList<>();
+        for (ServerPlayer p : all) names.add(p.getGameProfile().getName());
+        for (ServerPlayer p : all) {
             Net.toPlayer(p, arena);
-            p.displayClientMessage(Component.literal("Duel! " + a.getGameProfile().getName() + " vs " + b.getGameProfile().getName()
+            p.displayClientMessage(Component.literal("Duel! " + String.join(" vs ", names)
                     + (commander ? " (Commander)" : "")).withStyle(ChatFormatting.GOLD), true);
         }
     }
@@ -1231,6 +1328,9 @@ public final class GauntletDuels {
     @SubscribeEvent
     public static void commands(RegisterCommandsEvent event) {
         event.getDispatcher().register(Commands.literal("mtgduel")
+                .then(Commands.literal("style").then(Commands.argument("kind", StringArgumentType.word())
+                        .executes(c -> c.getSource().getPlayer() == null ? 0
+                                : StarterKits.pickStyle(c.getSource().getPlayer(), "disk".equals(StringArgumentType.getString(c, "kind"))))))
                 .then(Commands.literal("challenge").then(Commands.argument("player", StringArgumentType.word())
                         .then(Commands.argument("stake", StringArgumentType.word()).then(Commands.argument("format", StringArgumentType.word())
                                 .executes(c -> withPlayer(c.getSource(), StringArgumentType.getString(c, "player"), (me, other) -> challengeWith(me, other,
@@ -1307,6 +1407,7 @@ public final class GauntletDuels {
             GRACE.values().removeIf(until -> until < tick);
         }
         if (tick % 2 != 0) return;
+        startGroupDuels();
         Set<Duel> duels = new HashSet<>(BY_PLAYER.values());
         for (Duel d : duels) {
             if (d.allForfeitedAt > 0 && System.currentTimeMillis() - d.allForfeitedAt > 15_000) {

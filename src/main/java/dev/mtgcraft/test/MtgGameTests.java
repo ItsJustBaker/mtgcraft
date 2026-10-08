@@ -134,7 +134,7 @@ public class MtgGameTests {
                 gauntlet |= s.is(MtgCraft.DUEL_GAUNTLET.get());
                 binder |= s.is(MtgCraft.BINDER.get());
             }
-            h.assertTrue(gauntlet && binder, "starter kit is missing the gauntlet or binder");
+            h.assertTrue(binder, "starter kit is missing the binder (the gauntlet or disk is picked from a menu)");
         });
     }
 

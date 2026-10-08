@@ -1,0 +1,6 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "equipment",
+  "ingredients": [ { "item": "mtgcraft:duel_disk" } ],
+  "result": { "item": "mtgcraft:duel_gauntlet" }
+}

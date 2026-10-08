@@ -1,6 +1,4 @@
 {
   "parent": "mtgcraft:quests/first_win",
-  "display": { "icon": { "item": "mtgcraft:duel_disk" }, "title": "Seasoned Duelist", "description": "Win 10 mob duels",  "frame": "goal", "show_toast": true, "announce_to_chat": true },
-  "criteria": { "done": { "trigger": "minecraft:impossible" } },
-  "rewards": { "loot": ["mtgcraft:quests/packs"], "experience": 150 }
+  "criteria": { "done": { "trigger": "minecraft:impossible" } }
 }

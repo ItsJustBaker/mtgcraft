@@ -126,10 +126,17 @@ public final class ArenaRenderer {
         event.setCanceled(true);
     }
 
-    // ------------------------------------------------------------------ the void: a dome of stars around the arena
+    // ------------------------------------------------------------------ the void: the world is pulled away into space
 
-    private static final int STARS = 260;
+    private static final int STARS = 320;
+    private static final net.minecraft.resources.ResourceLocation WHITE =
+            new net.minecraft.resources.ResourceLocation(MtgCraft.MODID, "textures/misc/white.png");
 
+    /**
+     * A dome of deep space just outside the stage, drawn like the stage itself (an emissive entity layer), so it shows
+     * with shader packs too, which ignore the fog. It fades in as the duel starts, hiding sky, hills and cave walls,
+     * with twinkling stars on its inside.
+     */
     @SubscribeEvent
     public static void stars(RenderLevelStageEvent event) {
         if (event.getStage() != RenderLevelStageEvent.Stage.AFTER_TRANSLUCENT_BLOCKS || ARENAS.isEmpty()) return;
@@ -140,35 +147,61 @@ public final class ArenaRenderer {
         if (p <= 0.01f) return;
         long now = System.currentTimeMillis();
         Vec3 c = new Vec3(a.x(), a.y(), a.z()).subtract(cam.getPosition());
-        org.joml.Vector3f left = cam.getLeftVector(), up = cam.getUpVector();
         Matrix4f m = event.getPoseStack().last().pose();
         MultiBufferSource.BufferSource buffers = Minecraft.getInstance().renderBuffers().bufferSource();
-        VertexConsumer vc = buffers.getBuffer(RenderType.lightning());
-        double r = a.radius() * 1.35;
-        java.util.Random rng = new java.util.Random(a.key().asLong());
-        for (int i = 0; i < STARS; i++) {
-            // Evenly spread over the upper part of a sphere (a little below the floor too), slowly turning.
-            double yy = rng.nextDouble() * 1.15 - 0.15, ang = rng.nextDouble() * Math.PI * 2 + now / 90000.0;
-            double rr = Math.sqrt(Math.max(0, 1 - yy * yy));
-            double sx = c.x + Math.cos(ang) * rr * r, sy = c.y + yy * r, sz = c.z + Math.sin(ang) * rr * r;
-            float size = (float) (0.04 + rng.nextDouble() * 0.09) * a.radius() / 8f;
-            float tw = 0.55f + 0.45f * (float) Math.sin(now / (300.0 + rng.nextInt(700)) + i);
-            int alpha = (int) (255 * p * tw);
-            int tint = rng.nextInt(5);
-            int rgb = tint == 0 ? 0xB0C8FF : tint == 1 ? 0xFFE6B0 : 0xFFFFFF;
-            int col = (alpha << 24) | rgb;
-            float lx = left.x() * size, ly = left.y() * size, lz = left.z() * size;
-            float ux = up.x() * size, uy = up.y() * size, uz = up.z() * size;
-            star(vc, m, sx - lx - ux, sy - ly - uy, sz - lz - uz, col);
-            star(vc, m, sx + lx - ux, sy + ly - uy, sz + lz - uz, col);
-            star(vc, m, sx + lx + ux, sy + ly + uy, sz + lz + uz, col);
-            star(vc, m, sx - lx + ux, sy - ly + uy, sz - lz + uz, col);
+        RenderType type = RenderType.entityTranslucentEmissive(WHITE);
+        VertexConsumer vc = buffers.getBuffer(type);
+        double r = a.radius() * 1.45 + 2;
+
+        // The dome: a full sphere, deep navy overhead and violet at the horizon (a boss arena burns a little red).
+        int lat = 14, lon = 36;
+        for (int i = 0; i < lat; i++) {
+            double t0 = Math.PI * i / lat - Math.PI / 2, t1 = Math.PI * (i + 1) / lat - Math.PI / 2;
+            for (int j = 0; j < lon; j++) {
+                double f0 = 2 * Math.PI * j / lon, f1 = 2 * Math.PI * (j + 1) / lon;
+                Vec3 v00 = sph(c, r, t0, f0), v01 = sph(c, r, t0, f1), v11 = sph(c, r, t1, f1), v10 = sph(c, r, t1, f0);
+                int col = sky((t0 + t1) / 2, a.boss(), (int) (250 * p));
+                quad(vc, m, v00, v01, v11, v10, col);
+                quad(vc, m, v10, v11, v01, v00, col);
+            }
         }
-        buffers.endBatch(RenderType.lightning());
+        // Stars on the inside of the dome.
+        org.joml.Vector3f left = cam.getLeftVector(), up = cam.getUpVector();
+        java.util.Random rng = new java.util.Random(a.key().asLong());
+        double sr = r * 0.97;
+        for (int i = 0; i < STARS; i++) {
+            double yy = rng.nextDouble() * 1.2 - 0.2, ang = rng.nextDouble() * Math.PI * 2 + now / 120000.0;
+            double rr = Math.sqrt(Math.max(0, 1 - yy * yy));
+            Vec3 s = c.add(Math.cos(ang) * rr * sr, yy * sr, Math.sin(ang) * rr * sr);
+            float size = (float) (0.05 + rng.nextDouble() * rng.nextDouble() * 0.16) * (float) (r / 8);
+            float tw = 0.6f + 0.4f * (float) Math.sin(now / (250.0 + rng.nextInt(900)) + i);
+            int tint = rng.nextInt(6);
+            int rgb = tint == 0 ? 0xA8C4FF : tint == 1 ? 0xFFE2A8 : tint == 2 ? 0xE0B8FF : 0xFFFFFF;
+            int col = ((int) (255 * p * tw) << 24) | rgb;
+            Vec3 l = new Vec3(left.x() * size, left.y() * size, left.z() * size), u = new Vec3(up.x() * size, up.y() * size, up.z() * size);
+            quad(vc, m, s.subtract(l).subtract(u), s.add(l).subtract(u), s.add(l).add(u), s.subtract(l).add(u), col);
+            quad(vc, m, s.subtract(l).add(u), s.add(l).add(u), s.add(l).subtract(u), s.subtract(l).subtract(u), col);
+        }
+        buffers.endBatch(type);
     }
 
-    private static void star(VertexConsumer vc, Matrix4f m, double x, double y, double z, int argb) {
-        vc.vertex(m, (float) x, (float) y, (float) z).color(argb >> 16 & 255, argb >> 8 & 255, argb & 255, argb >>> 24).endVertex();
+    private static Vec3 sph(Vec3 c, double r, double theta, double phi) {
+        return c.add(Math.cos(theta) * Math.cos(phi) * r, Math.sin(theta) * r, Math.cos(theta) * Math.sin(phi) * r);
+    }
+
+    /** Space colour by height on the dome (theta -pi/2 at the bottom to pi/2 overhead). */
+    private static int sky(double theta, boolean boss, int alpha) {
+        float h = (float) Math.max(0, Math.sin(theta));
+        int r = (int) ((boss ? 46 : 26) * (1 - h) + 4 * h), g = (int) (10 * (1 - h) + 6 * h), b = (int) (52 * (1 - h) + 22 * h);
+        return (alpha << 24) | r << 16 | g << 8 | b;
+    }
+
+    private static void quad(VertexConsumer vc, Matrix4f m, Vec3 a, Vec3 b, Vec3 c, Vec3 d, int argb) {
+        for (Vec3 v : new Vec3[]{a, b, c, d}) {
+            vc.vertex(m, (float) v.x, (float) v.y, (float) v.z).color(argb >> 16 & 255, argb >> 8 & 255, argb & 255, argb >>> 24)
+                    .uv(0.5f, 0.5f).overlayCoords(net.minecraft.client.renderer.texture.OverlayTexture.NO_OVERLAY)
+                    .uv2(0xF000F0).normal(0, 1, 0).endVertex();
+        }
     }
 
     // ------------------------------------------------------------------ the field

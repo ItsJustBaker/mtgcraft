@@ -96,7 +96,10 @@ public final class Packs {
         NECRO("Eidolon Pack", "BW", new String[]{"Wraith", "Zombie", "Spirit", "Cleric"}, new String[]{"sacrifice"}, "eidolon"),
         SAFARI("Naturalist Pack", "GR", new String[]{"Elephant", "Cat", "Bear", "Snake", "Lizard", "Bird"}, new String[]{"fight"}, "naturalist"),
         QUARK("Quark Pack", "UG", new String[]{"Crab", "Elemental", "Dog", "Wraith"}, new String[]{"scry"}, "quark"),
-        FORBIDDEN("Forbidden Pack", "BU", new String[]{"Demon", "Spirit", "Wizard"}, new String[]{"pay life"}, "forbidden_arcanus");
+        FORBIDDEN("Forbidden Pack", "BU", new String[]{"Demon", "Spirit", "Wizard"}, new String[]{"pay life"}, "forbidden_arcanus"),
+        VOID("Voidscape Pack", "UB", new String[]{"Horror", "Eldrazi", "Spirit"}, new String[]{"exile", "void"}, "voidscape"),
+        ANGLER("Angler Pack", "UG", new String[]{"Fish", "Octopus", "Crab", "Turtle", "Merfolk"}, new String[]{"islandwalk"}, "aquaculture"),
+        ALFHEIM("Alfheim Pack", "GW", new String[]{"Elf", "Faerie", "Dryad", "Treefolk"}, new String[]{"add one mana"}, "mythicbotany");
 
         public final String label;
         final String colors;

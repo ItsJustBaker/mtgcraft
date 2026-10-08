@@ -1,6 +1,4 @@
 {
   "parent": "mtgcraft:quests/first_win",
-  "display": { "icon": { "item": "mtgcraft:world_cup" }, "title": "Champion of the Village", "description": "Beat a Village Champion and win the MTG World Cup",  "frame": "challenge", "show_toast": true, "announce_to_chat": true },
-  "criteria": { "done": { "trigger": "minecraft:inventory_changed", "conditions": { "items": [ { "items": ["mtgcraft:world_cup"] } ] } } },
-  "rewards": { "loot": ["mtgcraft:quests/packs"], "experience": 200 }
+  "criteria": { "done": { "trigger": "minecraft:inventory_changed", "conditions": { "items": [ { "items": ["mtgcraft:world_cup"] } ] } } }
 }

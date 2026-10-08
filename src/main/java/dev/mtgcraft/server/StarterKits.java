@@ -35,6 +35,16 @@ public final class StarterKits {
     private static final String TAG = "mtgcraft_starter";
     /** Set once the player has been given their Starter Kit item. */
     private static final String TAG_KIT = "mtgcraft_starter_kit";
+    /** Set while the player still has a free glove-or-disk pick waiting. */
+    static final String TAG_STYLE = "mtgcraft_style_pick";
+
+    /** The glove-or-disk pick from the starter menu (once). */
+    public static int pickStyle(ServerPlayer p, boolean disk) {
+        if (!persisted(p).getBoolean(TAG_STYLE)) return 0;
+        persisted(p).remove(TAG_STYLE);
+        give(p, new ItemStack(disk ? MtgCraft.DUEL_DISK.get() : MtgCraft.DUEL_GAUNTLET.get()));
+        return 1;
+    }
 
     private StarterKits() {}
 
@@ -47,6 +57,10 @@ public final class StarterKits {
 
     /** Called once the player's client has the card engine loaded. */
     public static void maybeOffer(ServerPlayer p) {
+        if (persisted(p).getBoolean(TAG_STYLE)) {
+            Net.toPlayer(p, new Packets.Prompt("Pick your dueling gear", "Both work the same. You can craft the other one later.",
+                    List.of("Duel Gauntlet", "Duel Disk"), List.of("/mtgduel style glove", "/mtgduel style disk"), 0));
+        }
         // No menu forced on anyone: new players get a Starter Kit item (once) and open it when they like.
         if (!MtgConfig.STARTER_KIT.get() || persisted(p).getBoolean(TAG) || persisted(p).getBoolean(TAG_KIT)) return;
         persisted(p).putBoolean(TAG_KIT, true);
@@ -187,7 +201,10 @@ public final class StarterKits {
         }
         give(p, box);
         give(p, new ItemStack(MtgCraft.BINDER.get()));
-        give(p, new ItemStack(MtgCraft.DUEL_GAUNTLET.get()));
+        // Glove or Duel Disk: the player picks (see GauntletDuels: /mtgduel style).
+        persisted(p).putBoolean(TAG_STYLE, true);
+        Net.toPlayer(p, new Packets.Prompt("Pick your dueling gear", "Both work the same. You can craft the other one later.",
+                List.of("Duel Gauntlet", "Duel Disk"), List.of("/mtgduel style glove", "/mtgduel style disk"), 0));
         give(p, PackItem.themed(Packs.Theme.OVERWORLD, 3));
         p.displayClientMessage(Component.literal("Your starter deck: " + name + ". Right-click a mob with the Duel Gauntlet to duel!")
                 .withStyle(ChatFormatting.GOLD), false);

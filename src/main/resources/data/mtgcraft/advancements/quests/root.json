@@ -1,6 +1,4 @@
 {
   
-  "display": { "icon": { "item": "mtgcraft:duel_gauntlet" }, "title": "MTGCraft", "description": "Get a Duel Gauntlet or a Starter Kit", "background": "minecraft:textures/block/purple_concrete.png", "frame": "task", "show_toast": true, "announce_to_chat": true },
-  "criteria": { "done": { "trigger": "minecraft:inventory_changed", "conditions": { "items": [ { "items": ["mtgcraft:duel_gauntlet", "mtgcraft:starter_kit", "mtgcraft:duel_disk"] } ] } } },
-  "rewards": { "loot": ["mtgcraft:quests/pack"], "experience": 10 }
+  "criteria": { "done": { "trigger": "minecraft:inventory_changed", "conditions": { "items": [ { "items": ["mtgcraft:duel_gauntlet", "mtgcraft:starter_kit", "mtgcraft:duel_disk"] } ] } } }
 }

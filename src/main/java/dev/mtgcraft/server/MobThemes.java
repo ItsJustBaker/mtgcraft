@@ -138,6 +138,9 @@ public final class MobThemes {
             case "naturalist" -> Theme.SAFARI;
             case "quark" -> Theme.QUARK;
             case "forbidden_arcanus" -> Theme.FORBIDDEN;
+            case "voidscape" -> Theme.VOID;
+            case "aquaculture" -> Theme.ANGLER;
+            case "mythicbotany" -> Theme.ALFHEIM;
             case "productivebees" -> Theme.HIVE;
             case "ars_elemental" -> Theme.ARCANE;
             default -> null;
