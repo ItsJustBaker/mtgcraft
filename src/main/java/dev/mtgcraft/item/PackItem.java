@@ -85,6 +85,27 @@ public class PackItem extends Item {
         return pick(stack) != null || super.isFoil(stack);
     }
 
+    public static final String TAG_MOB = "MobType";
+    public static final String TAG_MOB_NAME = "MobName";
+
+    /**
+     * A mob's own pack (mostly cards of its creature type) when there are enough such cards, else its theme's pack.
+     * It keeps the theme too, for the pack art and the rest of the cards.
+     */
+    public static ItemStack forMob(net.minecraft.world.entity.Entity mob, Packs.Theme theme) {
+        ItemStack s = themed(theme, 1);
+        String type = dev.mtgcraft.server.MobThemes.creatureType(mob);
+        if (type == null || ForgeEngine.state() != ForgeEngine.State.READY || !Packs.hasMobPack(type)) return s;
+        s.getOrCreateTag().putString(TAG_MOB, type);
+        s.getOrCreateTag().putString(TAG_MOB_NAME, mob.getType().getDescription().getString());
+        return s;
+    }
+
+    public static String mobType(ItemStack stack) {
+        CompoundTag tag = stack.getTag();
+        return tag == null || !tag.contains(TAG_MOB) ? null : tag.getString(TAG_MOB);
+    }
+
     public static Packs.Theme theme(ItemStack stack) {
         CompoundTag tag = stack.getTag();
         if (tag == null || !tag.contains(TAG_THEME)) return null;
@@ -110,6 +131,7 @@ public class PackItem extends Item {
     public Component getName(ItemStack stack) {
         String pick = pick(stack);
         if (pick != null) return Component.literal("BOX".equals(pick) ? "Booster Box Pick" : "Booster Pick").withStyle(ChatFormatting.GOLD);
+        if (mobType(stack) != null) return Component.literal(stack.getTag().getString(TAG_MOB_NAME) + " Pack");
         Packs.Theme t = theme(stack);
         if (t != null) return Component.literal(t.label);
         String set = set(stack);
@@ -155,7 +177,8 @@ public class PackItem extends Item {
             set = Packs.randomSet();
             if (set == null) return InteractionResultHolder.fail(stack);
         }
-        List<Packs.Pull> pulls = t != null ? Packs.openTheme(t) : Packs.openSet(set);
+        String mob = mobType(stack);
+        List<Packs.Pull> pulls = mob != null && t != null ? Packs.openMob(mob, t) : t != null ? Packs.openTheme(t) : Packs.openSet(set);
         if (pulls.isEmpty()) {
             sp.displayClientMessage(Component.literal("This pack turned out empty."), true);
             return InteractionResultHolder.fail(stack);

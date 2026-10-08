@@ -15,6 +15,50 @@ import net.minecraftforge.registries.ForgeRegistries;
 public final class MobThemes {
     private MobThemes() {}
 
+    /** Mob names that aren't a Magic creature type themselves. */
+    private static final java.util.Map<String, String> TYPE_ALIASES = java.util.Map.ofEntries(
+            java.util.Map.entry("cow", "Ox"), java.util.Map.entry("mooshroom", "Ox"), java.util.Map.entry("pig", "Boar"),
+            java.util.Map.entry("hoglin", "Boar"), java.util.Map.entry("zoglin", "Boar"), java.util.Map.entry("chicken", "Bird"),
+            java.util.Map.entry("parrot", "Bird"), java.util.Map.entry("donkey", "Horse"), java.util.Map.entry("mule", "Horse"),
+            java.util.Map.entry("ocelot", "Cat"), java.util.Map.entry("bee", "Insect"), java.util.Map.entry("silverfish", "Insect"),
+            java.util.Map.entry("endermite", "Insect"), java.util.Map.entry("husk", "Zombie"), java.util.Map.entry("drowned", "Zombie"),
+            java.util.Map.entry("stray", "Skeleton"), java.util.Map.entry("creeper", "Elemental"), java.util.Map.entry("blaze", "Elemental"),
+            java.util.Map.entry("breeze", "Elemental"), java.util.Map.entry("enderman", "Horror"), java.util.Map.entry("slime", "Ooze"),
+            java.util.Map.entry("magma_cube", "Ooze"), java.util.Map.entry("ghast", "Spirit"), java.util.Map.entry("vex", "Spirit"),
+            java.util.Map.entry("allay", "Faerie"), java.util.Map.entry("phantom", "Spirit"), java.util.Map.entry("axolotl", "Salamander"),
+            java.util.Map.entry("tadpole", "Frog"), java.util.Map.entry("squid", "Squid"), java.util.Map.entry("glow_squid", "Squid"),
+            java.util.Map.entry("cod", "Fish"), java.util.Map.entry("salmon", "Fish"), java.util.Map.entry("pufferfish", "Fish"),
+            java.util.Map.entry("tropical_fish", "Fish"), java.util.Map.entry("guardian", "Fish"), java.util.Map.entry("elder_guardian", "Fish"),
+            java.util.Map.entry("polar_bear", "Bear"), java.util.Map.entry("panda", "Bear"), java.util.Map.entry("villager", "Human"),
+            java.util.Map.entry("wandering_trader", "Human"), java.util.Map.entry("pillager", "Human"), java.util.Map.entry("vindicator", "Human"),
+            java.util.Map.entry("evoker", "Wizard"), java.util.Map.entry("illusioner", "Wizard"), java.util.Map.entry("witch", "Warlock"),
+            java.util.Map.entry("ravager", "Beast"), java.util.Map.entry("piglin", "Boar"), java.util.Map.entry("piglin_brute", "Boar"),
+            java.util.Map.entry("zombified_piglin", "Zombie"), java.util.Map.entry("iron_golem", "Golem"), java.util.Map.entry("snow_golem", "Golem"),
+            java.util.Map.entry("shulker", "Horror"), java.util.Map.entry("warden", "Horror"), java.util.Map.entry("strider", "Beast"),
+            java.util.Map.entry("sniffer", "Beast"), java.util.Map.entry("dolphin", "Whale"), java.util.Map.entry("bat", "Bat"));
+
+    /**
+     * The Magic creature type a mob stands for (spider: Spider, drowned: Zombie, a modded grizzly_bear: Bear), or null.
+     * Tries the alias table, then each word of the mob's id from the last (so most modded mobs match too).
+     */
+    public static String creatureType(Entity e) {
+        ResourceLocation id = ForgeRegistries.ENTITY_TYPES.getKey(e.getType());
+        if (id == null) return null;
+        String path = id.getPath();
+        String alias = TYPE_ALIASES.get(path);
+        if (alias != null) return alias;
+        java.util.Collection<String> all = forge.card.CardType.getAllCreatureTypes();
+        String[] words = path.split("_");
+        for (int i = words.length - 1; i >= 0; i--) {
+            String w = words[i];
+            if (w.isEmpty()) continue;
+            String cap = Character.toUpperCase(w.charAt(0)) + w.substring(1);
+            if (all.contains(cap)) return cap;
+            if (cap.endsWith("s") && all.contains(cap.substring(0, cap.length() - 1))) return cap.substring(0, cap.length() - 1);
+        }
+        return null;
+    }
+
     public static Theme theme(Entity e) {
         String id = id(e.getType());
         int colon = id.indexOf(':');

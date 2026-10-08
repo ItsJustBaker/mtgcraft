@@ -313,3 +313,7 @@ pick; quests must be ATM9 (FTB Quests) quests. Everything else worked.
   free-for-all (`startPvp(List...)`, `GROUP_PVP`, `startGroupDuels`).
 Still open: deck screen revamp (needs the user's input), runtime booster art, playing your own familiar, per-theme art
 for the new themes, teleport-mid-duel bug, bugs 46/48 (card names).
+- Mob packs (user idea): every mob gets "<Mob> Pack" when Magic has 8+ cards of its creature type
+  (`MobThemes.creatureType`: alias table, then words of the entity id from the last; `Packs.openMob`: each slot 70%
+  that type, the rest from the mob's theme). Stored as tags MobType/MobName on top of Theme (art still by theme).
+  Used for duel rewards and kill drops (`PackItem.forMob`).

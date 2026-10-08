@@ -210,6 +210,62 @@ public final class Packs {
         return out;
     }
 
+    // ------------------------------------------------------------------ mob packs: one creature type per mob
+
+    private static final Map<String, Map<CardRarity, List<PaperCard>>> TYPE_POOLS = new java.util.HashMap<>();
+
+    /** Every paper card with this creature type, by rarity (cached). */
+    private static synchronized Map<CardRarity, List<PaperCard>> typePool(String type) {
+        Map<CardRarity, List<PaperCard>> cached = TYPE_POOLS.get(type);
+        if (cached != null) return cached;
+        Map<CardRarity, List<PaperCard>> out = new EnumMap<>(CardRarity.class);
+        for (CardRarity r : new CardRarity[]{CardRarity.Common, CardRarity.Uncommon, CardRarity.Rare, CardRarity.MythicRare}) {
+            out.put(r, new ArrayList<>());
+        }
+        for (PaperCard pc : FModel.getMagicDb().getCommonCards().getUniqueCards()) {
+            CardRules rules = pc.getRules();
+            if (rules == null || rules.getType() == null || !rules.getType().hasCreatureType(type) || !paperCard(pc)) continue;
+            List<PaperCard> bucket = out.get(pc.getRarity());
+            if (bucket != null) bucket.add(pc);
+        }
+        TYPE_POOLS.put(type, out);
+        return out;
+    }
+
+    /** Whether there are enough cards of a creature type for its own pack. */
+    public static boolean hasMobPack(String type) {
+        int n = 0;
+        for (List<PaperCard> l : typePool(type).values()) n += l.size();
+        return n >= 8;
+    }
+
+    /**
+     * A mob's own pack: the same shape as a themed pack, but each card is of the mob's creature type 7 times in 10
+     * (when the type has cards of that rarity), the rest from the mob's theme.
+     */
+    public static List<Pull> openMob(String type, Theme theme) {
+        Map<CardRarity, List<PaperCard>> mine = typePool(type), wide = pool(theme);
+        List<Pull> out = new ArrayList<>();
+        for (int i = 0; i < 10; i++) out.add(new Pull(pickOf(mine.get(CardRarity.Common), wide.get(CardRarity.Common)), false));
+        for (int i = 0; i < 3; i++) out.add(new Pull(pickOf(mine.get(CardRarity.Uncommon), wide.get(CardRarity.Uncommon)), false));
+        boolean mythic = RNG.nextInt(7) == 0;
+        CardRarity top = mythic ? CardRarity.MythicRare : CardRarity.Rare;
+        List<PaperCard> topMine = mine.get(top).isEmpty() ? mine.get(CardRarity.Rare) : mine.get(top);
+        List<PaperCard> topWide = wide.get(top).isEmpty() ? wide.get(CardRarity.Rare) : wide.get(top);
+        out.add(new Pull(pickOf(topMine, topWide), false));
+        out.removeIf(p -> p.card() == null);
+        PaperCard land = basicLand(theme);
+        if (land != null) out.add(new Pull(land, false));
+        if (RNG.nextInt(6) == 0 && !out.isEmpty()) out.set(0, new Pull(out.get(0).card(), true));
+        return out;
+    }
+
+    private static PaperCard pickOf(List<PaperCard> mine, List<PaperCard> wide) {
+        boolean useMine = !mine.isEmpty() && (wide.isEmpty() || RNG.nextInt(10) < 7);
+        List<PaperCard> from = useMine ? mine : wide;
+        return from.isEmpty() ? null : from.get(RNG.nextInt(from.size()));
+    }
+
     /** A boss box: 12 packs' worth plus two extra rares. */
     public static List<List<Pull>> openBox(Theme theme) {
         List<List<Pull>> packs = new ArrayList<>();
